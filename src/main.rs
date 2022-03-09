@@ -1,42 +1,40 @@
 mod hashing;
+mod persist;
 
-use std::path::Path;
+use hashing::hash_file;
+use persist::update_hashes;
 use ring::digest::Digest;
-use hashing::hash_tree;
-use sled;
+use sled::Db;
+use std::path::Path;
+use std::time::{Duration, Instant};
+use walkdir::WalkDir;
 
-static DB_FILE: &str = "/tmp/noinu.db";
+static DB_FILE: &str = "/tmp/nitros.db";
 
 fn main() {
-    let file_path = Path::new("/tmp/test");
-    let file_path_str: &str = file_path.to_str().unwrap();
+    let start = Instant::now();
+    hash_tree();
+    let duration = start.elapsed();
 
-    let hash = hashing::hash_file(file_path).unwrap();
-    update_hashes(file_path_str, &hash).unwrap();
-    check_hashes(file_path_str, &hash).unwrap();
+    println!("Time elapsed in expensive_function() is: {:?}", duration);
 }
 
-fn check_hashes(file_path: &str, file_hash: &str) -> std::io::Result<()>{
-    let tree = sled::open(DB_FILE)?;
-    assert_eq!(
-      tree.get(file_path)?,
-      Some(sled::IVec::from(file_hash)),
-    );
-    tree.flush()?;
-    println!("finished checking");
+pub fn hash_tree() -> std::io::Result<()> {
+    let db = sled::open(DB_FILE)?;
+    let start_path = Path::new(".");
+    let mut index = 0;
+    for entry in WalkDir::new(start_path) {
+        let file_path_entry = entry.unwrap();
+        let file_path = file_path_entry.path();
+        if file_path.is_dir() {
+            continue;
+        }
+        let file_path_str = file_path.to_str().unwrap();
+        let hash = hashing::hash_file(&file_path).unwrap();
+        update_hashes(&db, file_path_str, &hash).unwrap();
+        index += 1;
+    }
+    db.flush()?;
+    println!("N files: {}", index);
     Ok(())
 }
-
-fn update_hashes(file_path: &str, file_hash: &str) -> std::io::Result<()> {
-    let tree = sled::open(DB_FILE)?;
-
-    // insert and get, similar to std's BTreeMap
-    let old_value = tree.insert(file_path, file_hash)?;
-
-    // block until all operations are stable on disk
-    // (flush_async also available to get a Future)
-    tree.flush()?;
-    println!("finished persisting");
-    Ok(())
-}
-
