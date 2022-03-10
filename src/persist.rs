@@ -10,6 +10,10 @@ pub fn update_hashes(db: &sled::Db, file_path: &str, file_hash: &str) -> std::io
     // insert and get, similar to std's BTreeMap
     let old_value = db.insert(file_path, file_hash)?;
 
+    match old_value {
+        Some(v) => assert_eq!(v, file_hash, "file path: {}", file_path),
+        None => println!("is none"),
+    }
     // block until all operations are stable on disk
     // (flush_async also available to get a Future)
     Ok(())
