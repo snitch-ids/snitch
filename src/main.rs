@@ -1,6 +1,8 @@
+mod email;
 mod hashing;
 mod persist;
 
+use email::send_mail;
 use hashing::hash_file;
 use persist::update_hashes;
 use ring::digest::Digest;
@@ -11,7 +13,8 @@ use walkdir::WalkDir;
 
 static DB_FILE: &str = "/tmp/nitros.db";
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let start = Instant::now();
     hash_tree();
     let duration = start.elapsed();
@@ -34,6 +37,7 @@ pub fn hash_tree() -> std::io::Result<()> {
         update_hashes(&db, file_path_str, &hash).unwrap();
         index += 1;
     }
+
     db.flush()?;
     println!("N files: {}", index);
     Ok(())

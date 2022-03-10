@@ -10,3 +10,5 @@ walkdir = "2.3.2"
 ring = "0.17.0-alpha.11"
 data-encoding = "2.3.2"
 sled = "0.34.7"
+tokio = { version = "1", features = ["full"] }
+lettre = "0.10.0-beta.2"
