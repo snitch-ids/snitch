@@ -1,17 +1,19 @@
 mod config;
-mod email;
 mod hashing;
+mod notifiers;
 mod persist;
 
 use config::load_config;
-use email::send_mail;
 use hashing::hash_file;
+use notifiers::email::send_mail;
+use notifiers::telegram::send_telegram;
 use persist::update_hashes;
 
 use ring::digest::Digest;
 use sled::Db;
 use std::path::Path;
 use std::time::{Duration, Instant};
+use tokio::runtime::Runtime;
 use walkdir::WalkDir;
 
 static DB_DIRECTORY: &str = "/tmp/nitros.db";
@@ -39,7 +41,7 @@ pub fn hash_tree(start_path: &Path) -> std::io::Result<()> {
         let file_path_entry = entry.unwrap();
         let file_path = file_path_entry.path();
 
-        if file_path.is_dir() || file_path.is_symlink(){
+        if file_path.is_dir() || file_path.is_symlink() {
             // skipping directories and symlinks for now
             continue;
         }
