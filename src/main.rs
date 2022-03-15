@@ -13,7 +13,7 @@ use sled::Db;
 use std::path::Path;
 use std::time::{Duration, Instant};
 use tokio::runtime::Runtime;
-use walkdir::WalkDir;
+use walkdir::{DirEntry, WalkDir};
 use crate::persist::HashMismatch;
 
 static DB_DIRECTORY: &str = "/tmp/nitros.db";
@@ -34,25 +34,34 @@ async fn main() {
     println!("Time elapsed to hash: {:?}", duration);
 }
 
+fn ignore_paths(entry: &DirEntry) -> bool {
+    entry.path().is_dir() || entry.path().is_symlink()
+}
+
+
 pub async fn hash_tree(start_path: &Path) -> std::io::Result<()> {
     let db = sled::open(DB_DIRECTORY)?;
     let mut index = 0;
-    for entry in WalkDir::new(start_path) {
-        let file_path_entry = entry?;
-        let file_path = file_path_entry.path();
 
-        if file_path.is_dir() || file_path.is_symlink() {
-            // skipping directories and symlinks for now
-            continue;
+    let walker = WalkDir::new(start_path).into_iter();
+    for entry in walker {
+        let file_path_entry = entry?.to_owned();
+
+        if ignore_paths(&file_path_entry){
+            continue
         }
 
-        let file_path_str = file_path.to_str().unwrap();
-        let hash = hashing::hash_file(&file_path).unwrap();
+        let fp = file_path_entry.clone();
+        let hash = hashing::hash_file(fp).await.unwrap();
 
-        let result = upsert_hashes(&db, file_path_str, &hash);
+        let result = upsert_hashes(&db, file_path_entry.clone(), &hash);
         match result {
             Ok(_) => {}
-            Err(e) => {notify_hash_changed(&e.file_path).await}
+            Err(e) => {
+                tokio::spawn(async move {
+                    notify_hash_changed(e).await;
+                });
+            }
         }
         index += 1;
     }

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::env;
 use std::path::Path;
 
-pub async fn send_telegram(file_path: &str) -> Result<(), reqwest::Error> {
+pub async fn send_telegram(file_path: String) -> Result<(), reqwest::Error> {
     let token = env::var("TELEGRAM_BOT_TOKEN").expect("TELEGRAM_BOT_TOKEN not set");
     let chat_id = env::var("TELEGRAM_CHAT_ID").expect("TELEGRAM_CHAT_ID not set");
     let url = format!("https://api.telegram.org/bot{}/sendMessage", token);

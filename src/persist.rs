@@ -2,6 +2,9 @@ use sled;
 use std::error::Error;
 use std::fmt::{write, Display, Formatter};
 use std::{error, fmt};
+use std::path::Path;
+use sled::Db;
+use walkdir::DirEntry;
 
 pub struct HashMismatch {
     pub file_path: String,
@@ -25,14 +28,15 @@ impl fmt::Debug for HashMismatch {
     }
 }
 
-pub fn upsert_hashes(db: &sled::Db, file_path: &str, file_hash: &str) -> Result<(), HashMismatch> {
+pub fn upsert_hashes(db: &sled::Db, fp: DirEntry, file_hash: &str) -> Result<(), HashMismatch> {
     // insert and get, similar to std's BTreeMap
+
+    let file_path = fp.path().to_str().unwrap();
     let old_value = db
         .insert(file_path, file_hash)
         .expect("something went wrong persisting the hash");
 
     match old_value {
-        // Some(v) => assert_eq!(v, file_hash, "file path: {}", file_path),
         Some(v) => {
             if v != file_hash {
                 return Err(HashMismatch {
