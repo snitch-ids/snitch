@@ -1,6 +1,7 @@
-use lettre::transport::smtp::authentication::Credentials;
-use lettre::{Message, SmtpTransport, Transport};
 use std::env;
+
+use lettre::{Message, SmtpTransport, Transport};
+use lettre::transport::smtp::authentication::Credentials;
 
 pub fn send_mail(file_path: &str) {
     let smtp_user;

@@ -1,8 +1,8 @@
-use reqwest;
-use reqwest::header::HeaderMap;
 use std::collections::HashMap;
 use std::env;
-use std::path::Path;
+
+use reqwest;
+use reqwest::header::HeaderMap;
 
 pub async fn send_telegram(file_path: String) -> Result<(), reqwest::Error> {
     let token = env::var("TELEGRAM_BOT_TOKEN").expect("TELEGRAM_BOT_TOKEN not set");
@@ -25,7 +25,7 @@ pub async fn send_telegram(file_path: String) -> Result<(), reqwest::Error> {
     headers.insert("Content-Type", "application/json".parse().unwrap());
 
     let client = reqwest::Client::new();
-    let res = client
+    client
         .post(url)
         .headers(headers)
         .json(&params)

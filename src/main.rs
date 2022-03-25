@@ -1,24 +1,23 @@
-mod config;
-mod hashing;
-mod notifiers;
-mod persist;
+use std::path::Path;
+use std::process;
+use std::time::Instant;
 
-use config::load_config;
-use hashing::hash_file;
+use clap::Parser;
+use walkdir::{DirEntry, WalkDir};
+
 use notifiers::notify_hash_changed;
 use persist::upsert_hashes;
 
 use crate::config::{load_config_from_file, print_basic_config};
 use crate::persist::HashMismatch;
-use ring::digest::Digest;
-use sled::Db;
-use std::path::{Path, PathBuf};
-use std::process;
-use std::time::{Duration, Instant};
-use tokio::runtime::Runtime;
-use walkdir::{DirEntry, WalkDir};
 
-use clap::{Parser, Subcommand};
+mod config;
+mod hashing;
+mod notifiers;
+mod persist;
+
+static DB_DIRECTORY: &str = "/tmp/nitros.db";
+static DEFAULT_CONFIG: &str = "/etc/nitro/config.yaml";
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -27,8 +26,6 @@ struct Cli {
     #[clap(long)]
     demo_config: bool,
 }
-
-static DB_DIRECTORY: &str = "/tmp/nitros.db";
 
 #[tokio::main]
 async fn main() {
@@ -39,8 +36,7 @@ async fn main() {
         process::exit(0);
     }
 
-    let config_path = Path::new("/etc/nitro/config.yaml");
-    let config = load_config_from_file(config_path).unwrap();
+    let config = load_config_from_file(Path::new(DEFAULT_CONFIG)).unwrap();
     let directories = config.get("directories").unwrap();
 
     let start = Instant::now();
@@ -61,7 +57,7 @@ fn ignore_paths(entry: &DirEntry) -> bool {
 }
 
 pub async fn hash_tree(start_path: &Path) -> std::io::Result<()> {
-    let db = sled::open(DB_DIRECTORY)?;
+    let db = sled::open(Path::new(DB_DIRECTORY))?;
     let mut index = 0;
 
     let walker = WalkDir::new(start_path).into_iter();

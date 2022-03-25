@@ -1,9 +1,6 @@
+use std::fmt;
+
 use sled;
-use sled::Db;
-use std::error::Error;
-use std::fmt::{write, Display, Formatter};
-use std::path::Path;
-use std::{error, fmt};
 use walkdir::DirEntry;
 
 pub struct HashMismatch {
@@ -17,7 +14,7 @@ impl fmt::Display for HashMismatch {
     }
 }
 
-// A unique format for dubugging output
+// A unique format for debugging output
 impl fmt::Debug for HashMismatch {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "HashMismatch {{ file_path: {} }}", self.file_path)
