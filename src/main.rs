@@ -15,7 +15,10 @@ mod config;
 mod hashing;
 mod notifiers;
 mod persist;
-
+#[macro_use]
+extern crate log;
+use env_logger::Builder;
+use log::LevelFilter;
 static DB_DIRECTORY: &str = "/tmp/nitros.db";
 static DEFAULT_CONFIG: &str = "/etc/nitro/config.yaml";
 
@@ -29,6 +32,7 @@ struct Cli {
 
 #[tokio::main]
 async fn main() {
+    Builder::new().filter_level(LevelFilter::Info).init();
     let args = Cli::parse();
 
     if args.demo_config == true {
@@ -41,15 +45,15 @@ async fn main() {
 
     let start = Instant::now();
     for directory in directories {
-        println!("process {}", directory);
+        info!("process directory: {}", directory);
         let start_path = Path::new(directory);
         if !start_path.exists() {
-            println!("configured path {:?} does not exist", start_path);
+            warn!("configured path {:?} does not exist", start_path);
         }
         hash_tree(start_path).await;
     }
     let duration = start.elapsed();
-    println!("Time elapsed to hash: {:?}", duration);
+    info!("Time elapsed to hash: {:?}", duration);
 }
 
 fn ignore_paths(entry: &DirEntry) -> bool {
@@ -70,20 +74,13 @@ pub async fn hash_tree(start_path: &Path) -> std::io::Result<()> {
 
         let fp = file_path_entry.clone();
         let hash = hashing::hash_file(fp).await.unwrap();
-
-        let result = upsert_hashes(&db, file_path_entry.clone(), &hash);
-        match result {
-            Ok(_) => {}
-            Err(e) => {
-                tokio::spawn(async move {
-                    notify_hash_changed(e).await;
-                });
-            }
-        }
+        upsert_hashes(&db, file_path_entry.clone(), &hash).unwrap_or_else(|e| {
+            notify_hash_changed(e);
+        });
         index += 1;
     }
 
     db.flush()?;
-    println!("N files: {}", index);
+    info!("Hashed {} files", index);
     Ok(())
 }

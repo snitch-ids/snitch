@@ -1,9 +1,9 @@
 use std::env;
 
-use lettre::{Message, SmtpTransport, Transport};
 use lettre::transport::smtp::authentication::Credentials;
+use lettre::{Message, SmtpTransport, Transport};
 
-pub fn send_mail(file_path: &str) {
+pub async fn send_mail(file_path: String) {
     let smtp_user;
     match env::var("SMTP_USER") {
         Ok(val) => smtp_user = val,
@@ -23,12 +23,12 @@ pub fn send_mail(file_path: &str) {
     }
 
     if smtp_password == "none" {
-        println!("SMTP_PASSWORD not defined. Cant send mail.");
+        warn!("SMTP_PASSWORD not defined. Cant send mail.");
         return;
     }
 
     let email = Message::builder()
-        .from("NoBody <noreply@intrusion.detection>".parse().unwrap())
+        .from("Nitro <noreply@intrusion.detection>".parse().unwrap())
         .reply_to("noreply@intrusion.detection".parse().unwrap())
         .to("marius.kriegerowski@gmail.com".parse().unwrap())
         .subject("Intrusion Detected")
@@ -45,7 +45,7 @@ pub fn send_mail(file_path: &str) {
 
     // Send the email
     match mailer.send(&email) {
-        Ok(_) => println!("Email sent successfully!"),
-        Err(e) => panic!("Could not send email: {:?}", e),
+        Ok(_) => debug!("Email sent successfully"),
+        Err(e) => warn!("Could not send email: {:?}", e),
     }
 }
