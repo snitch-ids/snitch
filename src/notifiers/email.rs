@@ -1,9 +1,9 @@
 use std::env;
 
-use lettre::{Message, SmtpTransport, Transport};
 use lettre::transport::smtp::authentication::Credentials;
+use lettre::{Message, SmtpTransport, Transport};
 
-pub fn send_mail(file_path: &str) {
+pub async fn send_mail(file_path: String) {
     let smtp_user;
     match env::var("SMTP_USER") {
         Ok(val) => smtp_user = val,
@@ -28,7 +28,7 @@ pub fn send_mail(file_path: &str) {
     }
 
     let email = Message::builder()
-        .from("NoBody <noreply@intrusion.detection>".parse().unwrap())
+        .from("Nitro <noreply@intrusion.detection>".parse().unwrap())
         .reply_to("noreply@intrusion.detection".parse().unwrap())
         .to("marius.kriegerowski@gmail.com".parse().unwrap())
         .subject("Intrusion Detected")

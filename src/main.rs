@@ -70,16 +70,9 @@ pub async fn hash_tree(start_path: &Path) -> std::io::Result<()> {
 
         let fp = file_path_entry.clone();
         let hash = hashing::hash_file(fp).await.unwrap();
-
-        let result = upsert_hashes(&db, file_path_entry.clone(), &hash);
-        match result {
-            Ok(_) => {}
-            Err(e) => {
-                tokio::spawn(async move {
-                    notify_hash_changed(e).await;
-                });
-            }
-        }
+        upsert_hashes(&db, file_path_entry.clone(), &hash).unwrap_or_else(|e| {
+            notify_hash_changed(e);
+        });
         index += 1;
     }
 
