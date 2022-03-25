@@ -1,7 +1,5 @@
-use std::error::Error;
 use std::fs::File;
-use std::io::{BufReader, Read, Write};
-use std::path::{Path, PathBuf};
+use std::io::{BufReader, Read};
 
 use data_encoding::HEXUPPER;
 use ring::digest::{Context, Digest, SHA256};

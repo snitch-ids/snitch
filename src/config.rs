@@ -1,5 +1,5 @@
-use serde::de::value::StringDeserializer;
 use std::collections::BTreeMap;
+use std::path::Path;
 
 fn basic_config() -> Result<String, serde_yaml::Error> {
     let directories = vec!["some/directory".to_string()];
@@ -11,9 +11,22 @@ fn basic_config() -> Result<String, serde_yaml::Error> {
     Ok(s)
 }
 
+pub fn load_config_from_file(
+    path: &Path,
+) -> Result<BTreeMap<String, Vec<String>>, serde_yaml::Error> {
+    let reader = std::fs::File::open(path).unwrap();
+    let config = serde_yaml::from_reader(reader)?;
+    Ok(config)
+}
+
 pub fn load_config(config: &String) -> Result<BTreeMap<String, Vec<String>>, serde_yaml::Error> {
     let deserialized_map: BTreeMap<String, Vec<String>> = serde_yaml::from_str(&config)?;
     Ok(deserialized_map)
+}
+
+pub fn print_basic_config() {
+    let config = basic_config().unwrap();
+    println!("{}", config);
 }
 
 #[cfg(test)]
