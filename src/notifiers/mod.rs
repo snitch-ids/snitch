@@ -1,6 +1,3 @@
-use std::path::Path;
-use serde_yaml::Value::String;
-use walkdir::DirEntry;
 use crate::HashMismatch;
 
 pub mod email;
