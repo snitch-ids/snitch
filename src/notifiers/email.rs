@@ -23,7 +23,7 @@ pub async fn send_mail(file_path: String) {
     }
 
     if smtp_password == "none" {
-        println!("SMTP_PASSWORD not defined. Cant send mail.");
+        warn!("SMTP_PASSWORD not defined. Cant send mail.");
         return;
     }
 
@@ -45,7 +45,7 @@ pub async fn send_mail(file_path: String) {
 
     // Send the email
     match mailer.send(&email) {
-        Ok(_) => println!("Email sent successfully!"),
-        Err(e) => panic!("Could not send email: {:?}", e),
+        Ok(_) => debug!("Email sent successfully"),
+        Err(e) => warn!("Could not send email: {:?}", e),
     }
 }

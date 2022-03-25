@@ -26,17 +26,11 @@ pub fn print_basic_config() {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::{basic_config, load_config};
+    use crate::config::basic_config;
 
     #[test]
     fn test_basic_config() {
         basic_config().unwrap();
     }
 
-    #[test]
-    fn test_load_config() {
-        let in_config = basic_config().unwrap();
-        let config = load_config(&in_config);
-        config.unwrap();
-    }
 }
