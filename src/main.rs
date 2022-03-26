@@ -1,3 +1,4 @@
+#![feature(generators)]
 #[macro_use]
 extern crate log;
 
@@ -12,12 +13,14 @@ use log::LevelFilter;
 use sled::Db;
 use walkdir::{DirEntry, WalkDir};
 
-use notifiers::notify_hash_changed;
+use crate::authentication_logs::watch_authentication_logs;
+use crate::notifiers::Dispatcher;
 use persist::upsert_hashes;
 
 use crate::config::{load_config_from_file, print_basic_config};
-use crate::persist::{check_files, HashMismatch};
+use crate::persist::check_files;
 
+mod authentication_logs;
 mod config;
 mod hashing;
 mod notifiers;
@@ -40,6 +43,10 @@ struct Cli {
     /// Start scanning files
     #[clap(short, long)]
     scan: bool,
+
+    /// Start scanning authentication
+    #[clap(short, long)]
+    watch_authentication: bool,
 }
 
 #[tokio::main]
@@ -58,6 +65,9 @@ async fn main() {
         init(config).await;
     } else if args.scan == true {
         check_files(config).await;
+    } else if args.watch_authentication {
+        let test_file = Path::new("/tmp/auth.log");
+        watch_authentication_logs(&test_file).await;
     }
     info!("Time elapsed to hash: {:?}", start.elapsed());
 }
@@ -99,8 +109,8 @@ async fn upsert_hash_tree(db: &Db, start_path: &Path) -> std::io::Result<()> {
 
         let fp = file_path_entry.clone();
         let hash = hashing::hash_file(fp.path()).await.unwrap();
-        upsert_hashes(&db, file_path_entry.clone(), &hash).unwrap_or_else(|e| {
-            notify_hash_changed(e);
+        upsert_hashes(&db, file_path_entry.clone(), &hash).unwrap_or_else(|mut e| {
+            e.dispatch();
         });
         index += 1;
     }

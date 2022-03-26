@@ -606,6 +606,7 @@ dependencies = [
  "env_logger",
  "lettre",
  "log",
+ "regex",
  "reqwest",
  "ring",
  "serde",

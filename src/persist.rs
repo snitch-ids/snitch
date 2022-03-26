@@ -3,7 +3,7 @@ use std::fmt;
 use std::path::Path;
 use std::str::from_utf8;
 
-use crate::{hashing, notify_hash_changed, DB_DIRECTORY};
+use crate::{hashing, notifiers::Dispatcher, DB_DIRECTORY};
 use sled;
 use walkdir::DirEntry;
 
@@ -21,6 +21,12 @@ impl fmt::Display for HashMismatch {
 impl fmt::Debug for HashMismatch {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "HashMismatch {{ file_path: {} }}", self.file_path)
+    }
+}
+
+impl Dispatcher for HashMismatch {
+    fn message(&mut self) -> String {
+        self.file_path.to_string()
     }
 }
 
@@ -43,7 +49,7 @@ pub fn upsert_hashes(db: &sled::Db, fp: DirEntry, file_hash: &str) -> Result<(),
     Ok(())
 }
 
-pub async fn check_files(config: BTreeMap<String, Vec<String>>) -> Result<(), HashMismatch> {
+pub async fn check_files(_config: BTreeMap<String, Vec<String>>) -> Result<(), HashMismatch> {
     let db = sled::open(Path::new(DB_DIRECTORY)).unwrap();
 
     for key in db.iter() {
@@ -52,9 +58,11 @@ pub async fn check_files(config: BTreeMap<String, Vec<String>>) -> Result<(), Ha
         let former_hash = from_utf8(&vec.1).unwrap();
 
         let fp = Path::new(&vec_str);
-        validate_hash(fp, former_hash).await.unwrap_or_else(|e| {
-            notify_hash_changed(e);
-        });
+        validate_hash(fp, former_hash)
+            .await
+            .unwrap_or_else(|mut e| {
+                e.dispatch();
+            });
     }
 
     Ok(())

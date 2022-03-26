@@ -1,0 +1,2 @@
+Mar 21 12:51:25 blabla-hostname sshd[955719]: Accepted publickey for demo-user from 12.23.43.12 port 32123 ssh2: RSA SHA256:ilijsdf+/lijsdf//sdflijjidj1123E5gKg
+Mar 21 12:51:25 blabla-hostname sshd[955719]: pam_unix(sshd:session): session opened for user demo-user by (uid=0)
