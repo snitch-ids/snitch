@@ -32,5 +32,4 @@ mod tests {
     fn test_basic_config() {
         basic_config().unwrap();
     }
-
 }
