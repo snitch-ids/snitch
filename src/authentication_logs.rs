@@ -12,9 +12,11 @@ use tokio::time;
 
 use crate::notifiers::Dispatcher;
 
+static INTERVAL: u64 = 1000;
+
 pub async fn watch_authentication_logs(path: &Path) {
     let mut file = File::open(path).await.unwrap();
-    let mut interval = time::interval(Duration::from_millis(1000));
+    let mut interval = time::interval(Duration::from_millis(INTERVAL));
     let mut contents = vec![];
     let mut position = file.read_to_end(&mut contents).await.unwrap();
 
@@ -38,8 +40,8 @@ pub async fn watch_authentication_logs(path: &Path) {
 impl Dispatcher for Login {
     fn message(&mut self) -> String {
         format!(
-            "<i>Nitro</i>\nNew login from IP <code>{}</code> on <b>{}</b>\n{}",
-             self.ip, self.hostname, self.datetime
+            "New login from IP <code>{}</code> on <b>{}</b>\n{}",
+            self.ip, self.hostname, self.datetime
         )
     }
 }

@@ -11,7 +11,7 @@ pub async fn send_telegram(message: String) -> Result<(), reqwest::Error> {
 
     let mut params = HashMap::new();
 
-    params.insert("text", message);
+    params.insert("text", format!("<i>Nitro</i>\n{}", message));
     params.insert("chat_id", chat_id);
     params.insert("parse_mode", "html".to_owned());
 
@@ -25,6 +25,8 @@ pub async fn send_telegram(message: String) -> Result<(), reqwest::Error> {
     );
     headers.insert("Content-Type", "application/json".parse().unwrap());
 
+    debug!("dispatching telegram message");
+
     let client = reqwest::Client::new();
     client
         .post(url)
@@ -32,6 +34,6 @@ pub async fn send_telegram(message: String) -> Result<(), reqwest::Error> {
         .json(&params)
         .send()
         .await?;
-
+    debug!("sent telegram message");
     Ok(())
 }

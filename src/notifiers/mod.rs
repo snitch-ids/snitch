@@ -22,10 +22,10 @@ impl Dispatcher for Notification {
 pub fn notify_hash_changed(message: String) {
     let file_path_telegram = message.clone();
     let file_path_mail = message.clone();
-    warn!("intrusion: {}", file_path_mail);
+    warn!("{}", file_path_mail);
 
     tokio::spawn(async move {
-        telegram::send_telegram(file_path_telegram).await.unwrap();
+        telegram::send_telegram(file_path_telegram).await;
     });
     tokio::spawn(async move {
         email::send_mail(file_path_mail).await;

@@ -5,12 +5,13 @@ extern crate log;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::process;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use clap::Parser;
 use env_logger::Builder;
 use log::LevelFilter;
 use sled::Db;
+use tokio::time;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::authentication_logs::watch_authentication_logs;
@@ -28,6 +29,7 @@ mod persist;
 
 static DB_DIRECTORY: &str = "/tmp/nitros.db";
 static DEFAULT_CONFIG: &str = "/etc/nitro/config.yaml";
+static TIMEOUT: u64 = 1000;
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -70,6 +72,9 @@ async fn main() {
         watch_authentication_logs(&test_file).await;
     }
     info!("Time elapsed to hash: {:?}", start.elapsed());
+
+    info!("Waiting a second for dispatcher to complete");
+    time::sleep(Duration::from_millis(TIMEOUT)).await;
 }
 
 fn ignore_paths(entry: &DirEntry) -> bool {

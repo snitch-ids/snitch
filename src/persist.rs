@@ -3,7 +3,11 @@ use std::fmt;
 use std::path::Path;
 use std::str::from_utf8;
 
-use crate::{hashing, notifiers::{Dispatcher, Notification}, DB_DIRECTORY};
+use crate::{
+    hashing,
+    notifiers::{Dispatcher, Notification},
+    DB_DIRECTORY,
+};
 use sled;
 use walkdir::DirEntry;
 
@@ -59,7 +63,12 @@ pub async fn check_files(_config: BTreeMap<String, Vec<String>>) -> Result<(), H
         let fp = Path::new(&vec_str);
 
         if !fp.exists() {
-            let mut notification = Notification{message: format!("directory {} does not exist but was found in databse", fp.display()),};
+            let mut notification = Notification {
+                message: format!(
+                    "directory <b>{}</b> does not exist but was previously there",
+                    fp.display()
+                ),
+            };
             notification.dispatch();
             continue;
         }
