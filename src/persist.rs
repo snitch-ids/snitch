@@ -3,7 +3,7 @@ use std::fmt;
 use std::path::Path;
 use std::str::from_utf8;
 
-use crate::{hashing, notifiers::Dispatcher, DB_DIRECTORY};
+use crate::{hashing, notifiers::{Dispatcher, Notification}, DB_DIRECTORY};
 use sled;
 use walkdir::DirEntry;
 
@@ -17,7 +17,6 @@ impl fmt::Display for HashMismatch {
     }
 }
 
-// A unique format for debugging output
 impl fmt::Debug for HashMismatch {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "HashMismatch {{ file_path: {} }}", self.file_path)
@@ -58,6 +57,13 @@ pub async fn check_files(_config: BTreeMap<String, Vec<String>>) -> Result<(), H
         let former_hash = from_utf8(&vec.1).unwrap();
 
         let fp = Path::new(&vec_str);
+
+        if !fp.exists() {
+            let mut notification = Notification{message: format!("directory {} does not exist but was found in databse", fp.display()),};
+            notification.dispatch();
+            continue;
+        }
+
         validate_hash(fp, former_hash)
             .await
             .unwrap_or_else(|mut e| {

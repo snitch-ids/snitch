@@ -89,9 +89,7 @@ async fn init(config: BTreeMap<String, Vec<String>>) {
     for directory in directories {
         info!("process directory: {}", directory);
         let start_path = Path::new(directory);
-        if !start_path.exists() {
-            warn!("configured path {:?} does not exist", start_path);
-        }
+
         upsert_hash_tree(&db, start_path).await;
     }
 }

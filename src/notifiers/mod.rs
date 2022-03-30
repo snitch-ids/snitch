@@ -9,6 +9,16 @@ pub trait Dispatcher {
     fn message(&mut self) -> String;
 }
 
+pub struct Notification {
+    pub message: String,
+}
+
+impl Dispatcher for Notification {
+    fn message(&mut self) -> String {
+        format!("{}", self.message)
+    }
+}
+
 pub fn notify_hash_changed(message: String) {
     let file_path_telegram = message.clone();
     let file_path_mail = message.clone();
