@@ -2,7 +2,6 @@
 #[macro_use]
 extern crate log;
 
-use std::collections::BTreeMap;
 use std::path::Path;
 use std::process;
 use std::time::{Duration, Instant};
@@ -10,13 +9,10 @@ use std::time::{Duration, Instant};
 use clap::Parser;
 use env_logger::Builder;
 use log::LevelFilter;
-use sled::Db;
 use tokio::time;
-use walkdir::{DirEntry, WalkDir};
 
 use crate::authentication_logs::watch_authentication_logs;
-use crate::notifiers::Dispatcher;
-use persist::upsert_hashes;
+use crate::hashing::init_hash_db;
 
 use crate::config::{load_config_from_file, print_basic_config};
 use crate::persist::check_files;
@@ -64,7 +60,7 @@ async fn main() {
 
     let start = Instant::now();
     if args.init == true {
-        init(config).await;
+        init_hash_db(config).await;
     } else if args.scan == true {
         check_files(config).await;
     } else if args.watch_authentication {
@@ -75,50 +71,4 @@ async fn main() {
 
     info!("Waiting a second for dispatcher to complete");
     time::sleep(Duration::from_millis(TIMEOUT)).await;
-}
-
-fn ignore_paths(entry: &DirEntry) -> bool {
-    entry.path().is_dir() || entry.path().is_symlink()
-}
-
-async fn init(config: BTreeMap<String, Vec<String>>) {
-    let database_path = Path::new(DB_DIRECTORY);
-    if database_path.exists() {
-        info!("database already found at: {}. Deleting.", DB_DIRECTORY);
-        std::fs::remove_dir_all(database_path);
-    }
-
-    let db = sled::open(database_path).unwrap();
-
-    let directories = config.get("directories").unwrap();
-    for directory in directories {
-        info!("process directory: {}", directory);
-        let start_path = Path::new(directory);
-
-        upsert_hash_tree(&db, start_path).await;
-    }
-}
-
-async fn upsert_hash_tree(db: &Db, start_path: &Path) -> std::io::Result<()> {
-    let mut index = 0;
-
-    let walker = WalkDir::new(start_path).into_iter();
-    for entry in walker {
-        let file_path_entry = entry?.to_owned();
-
-        if ignore_paths(&file_path_entry) {
-            continue;
-        }
-
-        let fp = file_path_entry.clone();
-        let hash = hashing::hash_file(fp.path()).await.unwrap();
-        upsert_hashes(&db, file_path_entry.clone(), &hash).unwrap_or_else(|mut e| {
-            e.dispatch();
-        });
-        index += 1;
-    }
-
-    db.flush()?;
-    info!("Hashed {} files", index);
-    Ok(())
 }

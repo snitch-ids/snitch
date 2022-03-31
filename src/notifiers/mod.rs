@@ -20,14 +20,13 @@ impl Dispatcher for Notification {
 }
 
 pub fn notify_hash_changed(message: String) {
-    let file_path_telegram = message.clone();
-    let file_path_mail = message.clone();
-    warn!("{}", file_path_mail);
+    let message = message.clone();
+    let message_mail = message.clone();
 
     tokio::spawn(async move {
-        telegram::send_telegram(file_path_telegram).await;
+        telegram::send_telegram(message).await;
     });
     tokio::spawn(async move {
-        email::send_mail(file_path_mail).await;
+        email::send_mail(message_mail).await;
     });
 }
