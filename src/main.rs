@@ -23,17 +23,12 @@ mod hashing;
 mod notifiers;
 mod persist;
 
-static DB_DIRECTORY: &str = "/tmp/nitros.db";
 static DEFAULT_CONFIG: &str = "/etc/nitro/config.yaml";
 static TIMEOUT: u64 = 1000;
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Cli {
-    /// print a demo configuration
-    #[clap(long)]
-    demo_config: bool,
-
     /// initialize the database
     #[clap(short, long)]
     init: bool,
@@ -45,6 +40,10 @@ struct Cli {
     /// Start scanning authentication
     #[clap(short, long)]
     watch_authentication: bool,
+
+    /// print a demo configuration
+    #[clap(long)]
+    demo_config: bool,
 }
 
 #[tokio::main]

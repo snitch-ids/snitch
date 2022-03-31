@@ -1,12 +1,11 @@
-use std::collections::BTreeMap;
 use std::fmt;
 use std::path::Path;
 use std::str::from_utf8;
 
 use crate::{
+    config::Config,
     hashing,
     notifiers::{Dispatcher, Notification},
-    DB_DIRECTORY,
 };
 use sled;
 use walkdir::DirEntry;
@@ -52,8 +51,8 @@ pub fn upsert_hashes(db: &sled::Db, fp: DirEntry, file_hash: &str) -> Result<(),
     Ok(())
 }
 
-pub async fn check_files(_config: BTreeMap<String, Vec<String>>) -> Result<(), HashMismatch> {
-    let db = sled::open(Path::new(DB_DIRECTORY)).unwrap();
+pub async fn check_files(config: Config) -> Result<(), HashMismatch> {
+    let db = sled::open(config.database_path()).unwrap();
 
     for key in db.iter() {
         let vec = key.unwrap();

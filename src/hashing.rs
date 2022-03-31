@@ -1,5 +1,4 @@
 use sled::Db;
-use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
@@ -8,9 +7,10 @@ use data_encoding::HEXUPPER;
 use ring::digest::{Context, Digest, SHA256};
 use walkdir::{DirEntry, WalkDir};
 
+use crate::config::Config;
+use crate::hashing;
 use crate::notifiers::Dispatcher;
 use crate::persist::upsert_hashes;
-use crate::{hashing, DB_DIRECTORY};
 
 async fn sha256_digest<R: Read>(mut reader: R) -> std::io::Result<Digest> {
     let mut context = Context::new(&SHA256);
@@ -41,21 +41,23 @@ fn ignore_paths(entry: &DirEntry) -> bool {
 }
 
 /// Initialize the file hash database
-pub async fn init_hash_db(config: BTreeMap<String, Vec<String>>) {
-    let database_path = Path::new(DB_DIRECTORY);
+pub async fn init_hash_db(config: Config) {
+    let database_path = config.database_path();
     if database_path.exists() {
-        info!("database already found at: {}. Deleting.", DB_DIRECTORY);
+        info!(
+            "database already found at: {:?}. Deleting.",
+            config.database_path()
+        );
         std::fs::remove_dir_all(database_path);
     }
 
     let db = sled::open(database_path).unwrap();
 
-    let directories = config.get("directories").unwrap();
+    let directories = config.directories();
     for directory in directories {
-        info!("process directory: {}", directory);
-        let start_path = Path::new(directory);
+        info!("process directory: {:?}", &directory);
 
-        upsert_hash_tree(&db, start_path).await;
+        upsert_hash_tree(&db, directory).await;
     }
 }
 
