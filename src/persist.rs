@@ -63,6 +63,7 @@ pub async fn check_files(config: Config) -> Result<(), HashMismatch> {
 
         if !fp.exists() {
             let mut notification = Notification {
+                config: &config.notifications,
                 message: format!(
                     "directory <b>{}</b> does not exist but was previously there",
                     fp.display()

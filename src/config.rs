@@ -1,11 +1,14 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+use crate::notifiers::NotificationConfig;
+
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     pub directories: Vec<String>,
     pub database_path: String,
     pub watch_authentication_logs: bool,
+    pub notifications: NotificationConfig,
 }
 
 impl Config {
@@ -26,6 +29,10 @@ impl Config {
             directories: vec!["asdf/asdf".to_owned()],
             database_path: "/etc/nitro/db".to_owned(),
             watch_authentication_logs: false,
+            notifications: NotificationConfig{
+                enable_email: true,
+                enable_telegram: true,
+            },
         }
     }
 }

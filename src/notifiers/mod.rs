@@ -1,3 +1,5 @@
+use serde::{Serialize, Deserialize};
+
 pub mod email;
 pub mod telegram;
 
@@ -9,11 +11,19 @@ pub trait Dispatcher {
     fn message(&mut self) -> String;
 }
 
-pub struct Notification {
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+
+pub struct NotificationConfig {
+    pub enable_email: bool,
+    pub enable_telegram: bool,
+}
+
+pub struct Notification<'a> {
+    pub config: &'a NotificationConfig,
     pub message: String,
 }
 
-impl Dispatcher for Notification {
+impl <'a> Dispatcher for Notification<'a> {
     fn message(&mut self) -> String {
         format!("{}", self.message)
     }
