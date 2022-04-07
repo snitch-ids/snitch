@@ -10,12 +10,16 @@ use tokio::io::SeekFrom;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::time;
 
-use crate::notifiers::Dispatcher;
+use crate::config::Config;
+use crate::notifiers::{Dispatcher, Notify};
 
 static INTERVAL: u64 = 1000;
 
-pub async fn watch_authentication_logs(path: &Path) {
-    let mut file = File::open(path).await.unwrap();
+pub async fn watch_authentication_logs(dispatcher: &Dispatcher, config: &Config) {
+    info!("start watching authentication logs");
+    let mut file = File::open(config.authentication_logs.clone())
+        .await
+        .unwrap();
     let mut interval = time::interval(Duration::from_millis(INTERVAL));
     let mut contents = vec![];
     let mut position = file.read_to_end(&mut contents).await.unwrap();
@@ -26,23 +30,14 @@ pub async fn watch_authentication_logs(path: &Path) {
         position += file.read_to_end(&mut contents).await.unwrap();
 
         let contents_str = from_utf8(&contents).unwrap();
-        let mut logins = parse_logins(contents_str);
+        let logins = parse_logins(contents_str);
 
-        info!("logins {:?}", logins);
-        for login in logins.iter_mut() {
-            login.dispatch();
+        for login in logins.iter() {
+            info!("logins {:?}", login);
+            dispatcher.dispatch(login);
         }
 
         interval.tick().await;
-    }
-}
-
-impl Dispatcher for Login {
-    fn message(&mut self) -> String {
-        format!(
-            "New login from IP <code>{}</code> on <b>{}</b>\n{}",
-            self.ip, self.hostname, self.datetime
-        )
     }
 }
 
@@ -63,6 +58,16 @@ impl Login {
             datetime,
             hostname,
         }
+    }
+}
+
+impl Notify for Login {
+    fn message(&self) -> String {
+        format!(
+            "New login from IP <code>{}</code> on <b>{}</b>\n{}",
+            self.ip, self.hostname, self.datetime
+        )
+        .to_string()
     }
 }
 

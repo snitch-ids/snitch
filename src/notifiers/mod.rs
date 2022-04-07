@@ -1,42 +1,46 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 pub mod email;
 pub mod telegram;
 
-pub trait Dispatcher {
-    fn dispatch(&mut self) {
-        notify_hash_changed(self.message());
-    }
-
-    fn message(&mut self) -> String;
-}
-
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-
-pub struct NotificationConfig {
+pub struct Dispatcher {
     pub enable_email: bool,
     pub enable_telegram: bool,
 }
 
-pub struct Notification<'a> {
-    pub config: &'a NotificationConfig,
-    pub message: String,
-}
+impl Dispatcher {
+    pub fn dispatch<T: Notify>(&self, notification: &T) {
+        let message = notification.message();
+        let message_mail = message.clone();
+        let message_telegram = message.clone();
 
-impl <'a> Dispatcher for Notification<'a> {
-    fn message(&mut self) -> String {
-        format!("{}", self.message)
+        tokio::spawn(async move {
+            telegram::send_telegram(message_telegram).await;
+        });
+        tokio::spawn(async move {
+            email::send_mail(message_mail).await;
+        });
+    }
+
+    pub fn new(enable_email: bool, enable_telegram: bool) -> Dispatcher {
+        Dispatcher {
+            enable_email,
+            enable_telegram,
+        }
     }
 }
 
-pub fn notify_hash_changed(message: String) {
-    let message = message.clone();
-    let message_mail = message.clone();
+pub trait Notify {
+    fn message(&self) -> String;
+}
 
-    tokio::spawn(async move {
-        telegram::send_telegram(message).await;
-    });
-    tokio::spawn(async move {
-        email::send_mail(message_mail).await;
-    });
+pub struct Notification {
+    pub message: String,
+}
+
+impl Notify for Notification {
+    fn message(&self) -> String {
+        return self.message.clone();
+    }
 }

@@ -15,6 +15,7 @@ use crate::authentication_logs::watch_authentication_logs;
 use crate::hashing::init_hash_db;
 
 use crate::config::{load_config_from_file, print_basic_config};
+use crate::notifiers::Dispatcher;
 use crate::persist::check_files;
 
 mod authentication_logs;
@@ -57,14 +58,14 @@ async fn main() {
     }
     let config = load_config_from_file(Path::new(DEFAULT_CONFIG)).unwrap();
 
+    let mut dispatcher = Dispatcher::new(false, true);
     let start = Instant::now();
     if args.init == true {
-        init_hash_db(config).await;
+        init_hash_db(&dispatcher, &config).await;
     } else if args.scan == true {
-        check_files(config).await;
+        check_files(&dispatcher, &config).await;
     } else if args.watch_authentication {
-        let test_file = Path::new("/tmp/auth.log");
-        watch_authentication_logs(&test_file).await;
+        watch_authentication_logs(&dispatcher, &config).await;
     }
     info!("Time elapsed to hash: {:?}", start.elapsed());
 

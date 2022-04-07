@@ -5,7 +5,7 @@ use std::str::from_utf8;
 use crate::{
     config::Config,
     hashing,
-    notifiers::{Dispatcher, Notification},
+    notifiers::{Dispatcher, Notification, Notify},
 };
 use sled;
 use walkdir::DirEntry;
@@ -26,8 +26,8 @@ impl fmt::Debug for HashMismatch {
     }
 }
 
-impl Dispatcher for HashMismatch {
-    fn message(&mut self) -> String {
+impl Notify for HashMismatch {
+    fn message(&self) -> String {
         self.file_path.to_string()
     }
 }
@@ -51,7 +51,7 @@ pub fn upsert_hashes(db: &sled::Db, fp: DirEntry, file_hash: &str) -> Result<(),
     Ok(())
 }
 
-pub async fn check_files(config: Config) -> Result<(), HashMismatch> {
+pub async fn check_files(dispatcher: &Dispatcher, config: &Config) -> Result<(), HashMismatch> {
     let db = sled::open(config.database_path()).unwrap();
 
     for key in db.iter() {
@@ -62,22 +62,20 @@ pub async fn check_files(config: Config) -> Result<(), HashMismatch> {
         let fp = Path::new(&vec_str);
 
         if !fp.exists() {
-            let mut notification = Notification {
-                config: &config.notifications,
-                message: format!(
-                    "directory <b>{}</b> does not exist but was previously there",
-                    fp.display()
-                ),
-            };
-            notification.dispatch();
+            let message: String = format!(
+                "directory <b>{}</b> does not exist but was previously there",
+                fp.display()
+            )
+            .to_string();
+
+            let notification = Notification { message: message };
+            dispatcher.dispatch(&notification);
             continue;
         }
 
-        validate_hash(fp, former_hash)
-            .await
-            .unwrap_or_else(|mut e| {
-                e.dispatch();
-            });
+        validate_hash(fp, former_hash).await.unwrap_or_else(|e| {
+            dispatcher.dispatch(&e);
+        });
     }
 
     Ok(())

@@ -41,7 +41,7 @@ fn ignore_paths(entry: &DirEntry) -> bool {
 }
 
 /// Initialize the file hash database
-pub async fn init_hash_db(config: Config) {
+pub async fn init_hash_db(dispatcher: &Dispatcher, config: &Config) {
     let database_path = config.database_path();
     if database_path.exists() {
         info!(
@@ -57,13 +57,17 @@ pub async fn init_hash_db(config: Config) {
     for directory in directories {
         info!("process directory: {:?}", &directory);
 
-        upsert_hash_tree(&db, directory).await;
+        upsert_hash_tree(&db, dispatcher, directory).await;
     }
 }
 
 /// Starts walking a `start_path`, hashes all files and stores the hashes together with the
 /// path in a database `db`.
-async fn upsert_hash_tree(db: &Db, start_path: &Path) -> std::io::Result<()> {
+async fn upsert_hash_tree(
+    db: &Db,
+    dispatcher: &Dispatcher,
+    start_path: &Path,
+) -> std::io::Result<()> {
     let mut index = 0;
 
     let walker = WalkDir::new(start_path).into_iter();
@@ -76,8 +80,8 @@ async fn upsert_hash_tree(db: &Db, start_path: &Path) -> std::io::Result<()> {
 
         let fp = file_path_entry.clone();
         let hash = hashing::hash_file(fp.path()).await.unwrap();
-        upsert_hashes(&db, file_path_entry.clone(), &hash).unwrap_or_else(|mut e| {
-            e.dispatch();
+        upsert_hashes(&db, file_path_entry.clone(), &hash).unwrap_or_else(|e| {
+            dispatcher.dispatch(&e);
         });
         index += 1;
     }
