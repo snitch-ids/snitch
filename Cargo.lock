@@ -598,7 +598,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "nitros"
+name = "nitro"
 version = "0.1.0"
 dependencies = [
  "clap",

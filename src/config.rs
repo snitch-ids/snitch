@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::process;
 
 use crate::notifiers::Dispatcher;
 
+/// Nitro configurations
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     pub directories: Vec<String>,
@@ -17,6 +19,7 @@ impl Config {
         Path::new(&self.database_path)
     }
 
+    /// get directories as a vector of Paths.
     pub fn directories(&self) -> Vec<&Path> {
         let mut paths = vec![];
         for dir in self.directories.iter() {
@@ -25,6 +28,7 @@ impl Config {
         paths
     }
 
+    /// get a basic configuration for demonstration.
     pub fn demo_config() -> Config {
         Config {
             directories: vec!["asdf/asdf".to_owned()],
@@ -39,9 +43,15 @@ impl Config {
     }
 }
 
+/// Load the configuration from a file and return a [`Config`](Config) struct.
 pub fn load_config_from_file(path: &Path) -> Result<Config, serde_yaml::Error> {
+    if !path.exists() {
+        println!("No config file: {:?}\nTip: run\n\n  nitro --demo-config > /etc/nitro/config.yaml\n\nto get started.", path);
+        process::exit(1);
+    }
     let reader = std::fs::File::open(path).unwrap();
     let config = serde_yaml::from_reader(reader)?;
+
     Ok(config)
 }
 
