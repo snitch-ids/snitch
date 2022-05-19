@@ -10,7 +10,9 @@ Nitro is a file integrity and authentication monitoring system.
 Requirements
 ------------
 
-This is work in progress that requires `rust nightly` features.
+This is work in progress that requires `rust nightly` features. On a plain Ubuntu/Debian you also need to:
+
+   apt install gcc build-essential pkg-config
 
 Installation
 ------------
