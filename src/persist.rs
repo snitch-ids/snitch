@@ -5,7 +5,7 @@ use std::str::from_utf8;
 use crate::{
     config::Config,
     hashing,
-    notifiers::{Dispatcher, BasicNotification, Notification},
+    notifiers::{BasicNotification, Dispatcher, Notification},
 };
 use sled;
 use walkdir::DirEntry;

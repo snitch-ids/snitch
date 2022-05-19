@@ -14,6 +14,7 @@ use crate::notifiers::{Dispatcher, Notification};
 
 static INTERVAL: u64 = 1000;
 
+/// Watch authentication logs and dispatch a [Notification](notifiers::Notifaction) if a login was registered.
 pub async fn watch_authentication_logs(dispatcher: &Dispatcher, config: &Config) {
     info!("start watching authentication logs");
     let mut file = File::open(config.authentication_logs.clone())
@@ -70,6 +71,7 @@ impl Notification for Login {
     }
 }
 
+/// Parse a line in the authentication logs into a vector of [Login](Login) entries.
 fn parse_logins(contents: &str) -> Vec<Login> {
     lazy_static! {
         static ref RE: Regex = Regex::new(r"(?P<datetime>\D{3,4} \d{1,2} \d{1,2}:\d{2}:\d{2}) (?P<hostname>.+) (?P<process>sshd\[\d+\]):.* Accepted publickey for (?P<username>.*) from (?P<ipaddress>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}) port (?P<port>\d+)").unwrap();
