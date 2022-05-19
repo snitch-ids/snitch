@@ -10,13 +10,13 @@ pub struct Dispatcher {
 }
 
 impl Dispatcher {
-    pub fn dispatch<T: Notify>(&self, notification: &T) {
+    pub fn dispatch<T: Notification>(&self, notification: &T) {
         let message = notification.message();
         let message_mail = message.clone();
         let message_telegram = message.clone();
 
         tokio::spawn(async move {
-            telegram::send_telegram(message_telegram).await;
+            telegram::send_telegram(message_telegram).await.expect("Failed sending notification via telegram");
         });
         tokio::spawn(async move {
             email::send_mail(message_mail).await;
@@ -31,15 +31,18 @@ impl Dispatcher {
     }
 }
 
-pub trait Notify {
+/// Structs implementing this trait can be dispatched with the [Dispatcher](Dispatcher).
+pub trait Notification {
+
+    /// An implementation of this method returns a `String` that will be dispatched to the user.
     fn message(&self) -> String;
 }
 
-pub struct Notification {
+pub struct BasicNotification {
     pub message: String,
 }
 
-impl Notify for Notification {
+impl Notification for BasicNotification {
     fn message(&self) -> String {
         return self.message.clone();
     }

@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::str::from_utf8;
 use std::string::String;
 use std::time::Duration;
@@ -11,7 +10,7 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::time;
 
 use crate::config::Config;
-use crate::notifiers::{Dispatcher, Notify};
+use crate::notifiers::{Dispatcher, Notification};
 
 static INTERVAL: u64 = 1000;
 
@@ -61,7 +60,7 @@ impl Login {
     }
 }
 
-impl Notify for Login {
+impl Notification for Login {
     fn message(&self) -> String {
         format!(
             "New login from IP <code>{}</code> on <b>{}</b>\n{}",
@@ -84,6 +83,7 @@ fn parse_logins(contents: &str) -> Vec<Login> {
 
 #[tokio::test]
 async fn parse_test() {
-    let test_file = Path::new("test/auth.log");
+    use std::path::Path;
+    let _test_file = Path::new("test/auth.log");
     // watch_authentication_logs(test_file).await;
 }
