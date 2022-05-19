@@ -27,6 +27,7 @@ mod persist;
 static DEFAULT_CONFIG: &str = "/etc/nitro/config.yaml";
 static TIMEOUT: u64 = 1000;
 
+/// Get notified when someone intrudes into your system.
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Cli {
@@ -42,7 +43,7 @@ struct Cli {
     #[clap(short, long)]
     watch_authentication: bool,
 
-    /// print a demo configuration
+    /// print a demo configuration (e.g. as a template for /etc/nitro/config.yaml)
     #[clap(long)]
     demo_config: bool,
 }
@@ -58,7 +59,7 @@ async fn main() {
     }
     let config = load_config_from_file(Path::new(DEFAULT_CONFIG)).unwrap();
 
-    let mut dispatcher = Dispatcher::new(false, true);
+    let dispatcher = Dispatcher::new(false, true);
     let start = Instant::now();
     if args.init == true {
         init_hash_db(&dispatcher, &config).await;
