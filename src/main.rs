@@ -6,7 +6,7 @@ use std::path::Path;
 use std::process;
 use std::time::{Duration, Instant};
 
-use clap::Parser;
+use clap::StructOpt;
 use env_logger::Builder;
 use log::LevelFilter;
 use tokio::time;
@@ -17,36 +17,17 @@ use crate::hashing::init_hash_db;
 use crate::config::{load_config_from_file, print_basic_config};
 use crate::notifiers::Dispatcher;
 use crate::persist::check_files;
+use crate::cli::Cli;
 
 mod authentication_logs;
 mod config;
 mod hashing;
 mod notifiers;
 mod persist;
+mod cli;
 
 static DEFAULT_CONFIG: &str = "/etc/nitro/config.yaml";
 static TIMEOUT: u64 = 1000;
-
-/// Get notified when someone intrudes into your system.
-#[derive(Parser)]
-#[clap(author, version, about, long_about = None)]
-struct Cli {
-    /// initialize the database
-    #[clap(short, long)]
-    init: bool,
-
-    /// Start scanning files
-    #[clap(short, long)]
-    scan: bool,
-
-    /// Start scanning authentication
-    #[clap(short, long)]
-    watch_authentication: bool,
-
-    /// print a demo configuration (e.g. as a template for /etc/nitro/config.yaml)
-    #[clap(long)]
-    demo_config: bool,
-}
 
 #[tokio::main]
 async fn main() {
@@ -64,7 +45,7 @@ async fn main() {
     if args.init == true {
         init_hash_db(&dispatcher, &config).await;
     } else if args.scan == true {
-        check_files(&dispatcher, &config).await;
+        check_files(&dispatcher, &config).await.expect("Checking files failed");
     } else if args.watch_authentication {
         watch_authentication_logs(&dispatcher, &config).await;
     }

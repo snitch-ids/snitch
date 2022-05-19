@@ -5,7 +5,7 @@ use std::str::from_utf8;
 use crate::{
     config::Config,
     hashing,
-    notifiers::{Dispatcher, Notification, Notify},
+    notifiers::{Dispatcher, BasicNotification, Notification},
 };
 use sled;
 use walkdir::DirEntry;
@@ -26,7 +26,7 @@ impl fmt::Debug for HashMismatch {
     }
 }
 
-impl Notify for HashMismatch {
+impl Notification for HashMismatch {
     fn message(&self) -> String {
         self.file_path.to_string()
     }
@@ -68,7 +68,7 @@ pub async fn check_files(dispatcher: &Dispatcher, config: &Config) -> Result<(),
             )
             .to_string();
 
-            let notification = Notification { message: message };
+            let notification = BasicNotification { message: message };
             dispatcher.dispatch(&notification);
             continue;
         }
