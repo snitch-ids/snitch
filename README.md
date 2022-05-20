@@ -13,7 +13,7 @@ Requirements
 This is work in progress that requires `rust nightly` features. On a plain Ubuntu/Debian you also need to:
 
 ```
-apt install gcc build-essential pkg-config
+apt install gcc build-essential pkg-config libssl-dev
 ```
 
 Installation
@@ -65,3 +65,8 @@ and trigger a re-scan to verify hashes with
 ```
 nitro --scan
 ```
+
+Performance
+-----------
+
+`Ubuntu20.04` (~150.000 files) takes about one minute to hash on one virtual CPU using `SHA265` hashing.
