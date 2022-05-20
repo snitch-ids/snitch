@@ -43,20 +43,26 @@ pub async fn watch_authentication_logs(dispatcher: &Dispatcher, config: &Config)
 
 #[derive(Debug)]
 struct Login {
+    username: String,
     ip: String,
     datetime: String,
     hostname: String,
+    method: String,
 }
 
 impl Login {
     fn from_capture(cap: &Captures) -> Login {
+        let username = cap["username"].to_owned();
         let ip = cap["ipaddress"].to_owned();
         let datetime = cap["datetime"].to_owned();
         let hostname = cap["hostname"].to_owned();
+        let method = cap["method"].to_owned();
         Login {
+            username,
             ip,
             datetime,
             hostname,
+            method,
         }
     }
 }
@@ -64,8 +70,8 @@ impl Login {
 impl Notification for Login {
     fn message(&self) -> String {
         format!(
-            "New login from IP <code>{}</code> on <b>{}</b>\n{}",
-            self.ip, self.hostname, self.datetime
+            "New login by <b>{}</b> from IP <code>{}</code> on <b>{}</b>method: {}\n{}",
+            self.username, self.ip, self.hostname, self.datetime, self.method
         )
         .to_string()
     }
@@ -74,7 +80,7 @@ impl Notification for Login {
 /// Parse a line in the authentication logs into a vector of [Login](Login) entries.
 fn parse_logins(contents: &str) -> Vec<Login> {
     lazy_static! {
-        static ref RE: Regex = Regex::new(r"(?P<datetime>\D{3,4} \d{1,2} \d{1,2}:\d{2}:\d{2}) (?P<hostname>.+) (?P<process>sshd\[\d+\]):.* Accepted publickey for (?P<username>.*) from (?P<ipaddress>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}) port (?P<port>\d+)").unwrap();
+        static ref RE: Regex = Regex::new(r"(?P<datetime>\D{3,4} \d{1,2} \d{1,2}:\d{2}:\d{2}) (?P<hostname>.+) (?P<process>sshd\[\d+\]):.* Accepted (?P<method>\w+) for (?P<username>.*) from (?P<ipaddress>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}) port (?P<port>\d+)").unwrap();
     }
     let logins = RE
         .captures_iter(contents)
@@ -85,7 +91,11 @@ fn parse_logins(contents: &str) -> Vec<Login> {
 
 #[tokio::test]
 async fn parse_test() {
+    use std::fs;
     use std::path::Path;
-    let _test_file = Path::new("test/auth.log");
-    // watch_authentication_logs(test_file).await;
+
+    let test_file = Path::new("test/auth.log");
+    let data = fs::read_to_string(test_file).unwrap();
+    let logins = parse_logins(&data);
+    assert_eq!(logins.len(), 2);
 }
