@@ -16,7 +16,9 @@ impl Dispatcher {
         let message_telegram = message.clone();
 
         tokio::spawn(async move {
-            telegram::send_telegram(message_telegram).await.expect("Failed sending notification via telegram");
+            telegram::send_telegram(message_telegram)
+                .await
+                .expect("Failed sending notification via telegram");
         });
         tokio::spawn(async move {
             email::send_mail(message_mail).await;
@@ -33,7 +35,6 @@ impl Dispatcher {
 
 /// Structs implementing this trait can be dispatched with the [Dispatcher](Dispatcher).
 pub trait Notification {
-
     /// An implementation of this method returns a `String` that will be dispatched to the user.
     fn message(&self) -> String;
 }
