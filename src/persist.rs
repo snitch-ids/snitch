@@ -3,8 +3,7 @@ use std::path::Path;
 use std::str::from_utf8;
 
 use crate::{
-    config::Config,
-    hashing,
+    hashing::{self, NITRO_DATABASE_PATH},
     notifiers::{BasicNotification, Dispatcher, Notification},
 };
 use sled;
@@ -51,8 +50,8 @@ pub fn upsert_hashes(db: &sled::Db, fp: DirEntry, file_hash: &str) -> Result<(),
     Ok(())
 }
 
-pub async fn check_files(dispatcher: &Dispatcher, config: &Config) -> Result<(), HashMismatch> {
-    let db = sled::open(config.database_path()).unwrap();
+pub async fn check_files(dispatcher: &Dispatcher) -> Result<(), HashMismatch> {
+    let db = sled::open(NITRO_DATABASE_PATH).unwrap();
 
     for key in db.iter() {
         let vec = key.unwrap();

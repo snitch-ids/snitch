@@ -15,14 +15,18 @@ impl Dispatcher {
         let message_mail = message.clone();
         let message_telegram = message.clone();
 
-        tokio::spawn(async move {
-            telegram::send_telegram(message_telegram)
-                .await
-                .expect("Failed sending notification via telegram");
-        });
-        tokio::spawn(async move {
-            email::send_mail(message_mail).await;
-        });
+        if self.enable_telegram {
+            tokio::spawn(async move {
+                telegram::send_telegram(message_telegram)
+                    .await
+                    .expect("Failed sending notification via telegram");
+            });
+        }
+        if self.enable_email {
+            tokio::spawn(async move {
+                email::send_mail(message_mail).await;
+            });
+        }
     }
 
     pub fn new(enable_email: bool, enable_telegram: bool) -> Dispatcher {

@@ -12,7 +12,7 @@ use crate::hashing;
 use crate::notifiers::Dispatcher;
 use crate::persist::upsert_hashes;
 
-static NITRO_DATABASE_PATH: &str = "/etc/nitro/db";
+pub static NITRO_DATABASE_PATH: &str = "/etc/nitro/db";
 
 /// Calculate a `SHA256` hash from `reader`.
 async fn sha256_digest<R: Read>(mut reader: R) -> std::io::Result<Digest> {
@@ -42,18 +42,27 @@ pub async fn hash_file(path: &Path) -> std::io::Result<String> {
 
 /// Initialize the file hash database
 pub async fn init_hash_db(dispatcher: &Dispatcher, config: &Config) {
-    let database_path = config.database_path();
+    let database_path = Path::new(NITRO_DATABASE_PATH);
     if database_path.exists() {
         info!(
             "database already found at: {:?}. Deleting.",
-            config.database_path()
+            database_path
         );
         std::fs::remove_dir_all(database_path).expect("Failed deleting database.");
     }
+    let db_config = sled::Config::default()
+        .path(NITRO_DATABASE_PATH)
+        .cache_capacity(10_000_000_000)
+        .flush_every_ms(Some(10000000));
 
-    let db = sled::open(database_path).unwrap();
+    let db = db_config.open().unwrap();
+
     let directories = config.directories();
     for directory in directories {
+        if !directory.exists() {
+            warn!("no such directory: {:?}", directory);
+            continue;
+        }
         info!("process directory: {:?}", &directory);
         upsert_hash_tree(&db, dispatcher, directory)
             .await

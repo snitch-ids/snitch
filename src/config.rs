@@ -8,17 +8,11 @@ use crate::notifiers::Dispatcher;
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     pub directories: Vec<String>,
-    pub database_path: String,
-    pub watch_authentication_logs: bool,
     pub notifications: Dispatcher,
     pub authentication_logs: String,
 }
 
 impl Config {
-    pub fn database_path(&self) -> &Path {
-        Path::new(&self.database_path)
-    }
-
     /// get directories as a vector of Paths.
     pub fn directories(&self) -> Vec<&Path> {
         let mut paths = vec![];
@@ -28,15 +22,21 @@ impl Config {
         paths
     }
 
-    /// get a basic configuration for demonstration.
+    /// get a basic configuration for demonstration. On Ubuntu and Debian this should be a good starting point.
     pub fn demo_config() -> Config {
         Config {
-            directories: vec!["asdf/asdf".to_owned()],
-            database_path: "/etc/nitro/db".to_owned(),
-            watch_authentication_logs: false,
+            directories: vec![
+                "/bin".to_owned(),
+                "/sbin".to_owned(),
+                "/boot".to_owned(),
+                "/root".to_owned(),
+                "/usr".to_owned(),
+                "/lib".to_owned(),
+                "/etc".to_owned(),
+            ],
             authentication_logs: "/var/log/auth.log".to_owned(),
             notifications: Dispatcher {
-                enable_email: true,
+                enable_email: false,
                 enable_telegram: true,
             },
         }

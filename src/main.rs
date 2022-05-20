@@ -45,7 +45,7 @@ async fn main() {
     if args.init == true {
         init_hash_db(&dispatcher, &config).await;
     } else if args.scan == true {
-        check_files(&dispatcher, &config)
+        check_files(&dispatcher)
             .await
             .expect("Checking files failed");
     } else if args.watch_authentication {
