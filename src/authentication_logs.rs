@@ -30,11 +30,17 @@ pub async fn watch_authentication_logs(dispatcher: &Dispatcher, config: &Config)
         position += file.read_to_end(&mut contents).await.unwrap();
 
         let contents_str = from_utf8(&contents).unwrap();
-        let logins = parse_authentications(contents_str);
 
+        let logins = find_logins(&contents_str);
         for login in logins.iter() {
             info!("logins {:?}", login);
             dispatcher.dispatch(login);
+        }
+
+        let root_elevations = find_root_elevations(&contents_str);
+        for root_elecation in root_elevations.iter() {
+            info!("root elevation {:?}", root_elecation);
+            dispatcher.dispatch(root_elecation);
         }
 
         interval.tick().await;
@@ -108,12 +114,12 @@ impl Notification for Login {
 }
 
 /// Finds logins in authentication logs
-fn find_root_elevations(contents: &str) -> Vec<Login> {
+fn find_root_elevations(contents: &str) -> Vec<RootElevation> {
     lazy_static! {
-        static ref RE: Regex = Regex::new(r"(?P<datetime>\D{3,4} \d{1,2} \d{1,2}:\d{2}:\d{2}) (?P<hostname>.+) sudo: pam_unix(sudo:session): session opened for user root by (?P<username>.*)").unwrap();
+        static ref RE: Regex = Regex::new(r"(?P<datetime>\D{3,4} \d{1,2} \d{1,2}:\d{2}:\d{2}) (?P<hostname>.+) sudo: pam_unix\(sudo:session\): session opened for user root by (?P<username>.*)").unwrap();
     }
     RE.captures_iter(contents)
-        .map(|cap| Login::from_capture(&cap))
+        .map(|cap| RootElevation::from_capture(&cap))
         .collect()
 }
 
@@ -127,16 +133,6 @@ fn find_logins(contents: &str) -> Vec<Login> {
         .collect()
 }
 
-/// Parse a line in the authentication logs into a vector of [Login](Login) entries.
-fn parse_authentications(contents: &str) -> Vec<Login> {
-    let mut logins = find_logins(&contents);
-    let mut root_elevations = find_root_elevations(&contents);
-    let mut concatenated = vec![];
-    concatenated.append(&mut logins);
-    concatenated.append(&mut root_elevations);
-    concatenated
-}
-
 #[tokio::test]
 async fn parse_test() {
     use std::fs;
@@ -144,6 +140,9 @@ async fn parse_test() {
 
     let test_file = Path::new("test/auth.log");
     let data = fs::read_to_string(test_file).unwrap();
-    let logins = parse_authentications(&data);
-    assert_eq!(logins.len(), 3);
+    let logins = find_logins(&data);
+    assert_eq!(logins.len(), 2);
+
+    let root_elecations = find_root_elevations(&data);
+    assert_eq!(root_elecations.len(), 1);
 }
