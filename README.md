@@ -1,6 +1,8 @@
 Nitro - Intrusion Notification
 ==============================
 
+[![Rust](https://github.com/HerrMuellerluedenscheid/nitro/actions/workflows/rust.yml/badge.svg)](https://github.com/HerrMuellerluedenscheid/nitro/actions/workflows/rust.yml)
+
 Nitro is a file integrity and authentication monitoring system.
 
  * Nitro calculates and stores hashes of files found by recursing user defined directory trees. If a file hash changes Nitro will send a warning to the user (via email or telegram) to notify about the modified file.
@@ -61,7 +63,7 @@ Run the initial scan
 nitro --init
 ```
 
-and trigger a re-scan to verify hashes with
+and trigger a re-scan to verify file integrity with
 ```
 nitro --scan
 ```
