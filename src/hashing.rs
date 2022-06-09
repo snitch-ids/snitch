@@ -54,8 +54,7 @@ pub async fn init_hash_db(dispatcher: &Dispatcher, config: &Config) {
 
     let db = db_config.open().unwrap();
 
-    let directories = config.directories();
-    for directory in directories {
+    for directory in config.directories() {
         if !directory.exists() {
             warn!("no such directory: {:?}", directory);
             continue;

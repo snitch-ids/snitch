@@ -6,6 +6,7 @@ use crate::{
     hashing::{self, NITRO_DATABASE_PATH},
     notifiers::{BasicNotification, Dispatcher, Notification},
 };
+use indicatif::ProgressBar;
 use sled;
 
 pub struct HashMismatch {
@@ -51,7 +52,11 @@ pub fn upsert_hashes(db: &sled::Db, fp: &Path, file_hash: &str) -> Result<(), Ha
 
 pub async fn validate_hashes(dispatcher: &Dispatcher) -> Result<(), HashMismatch> {
     let db = sled::open(NITRO_DATABASE_PATH).unwrap();
+    let n_items = db.len() as u64;
+    let pb = ProgressBar::new(n_items);
+
     for key in db.iter() {
+        pb.inc(1);
         let vec = key.unwrap();
         let vec_str = from_utf8(&vec.0).unwrap();
         let former_hash = from_utf8(&vec.1).unwrap();
@@ -74,6 +79,7 @@ pub async fn validate_hashes(dispatcher: &Dispatcher) -> Result<(), HashMismatch
             dispatcher.dispatch(&e);
         });
     }
+    pb.finish_with_message("done");
     info!("database checksum: {}", db.checksum().unwrap());
 
     Ok(())
