@@ -66,6 +66,6 @@ mod tests {
 
     #[test]
     fn test_basic_config() {
-        let x = Config::demo_config();
+        let _x = Config::demo_config();
     }
 }
