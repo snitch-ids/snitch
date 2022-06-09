@@ -17,7 +17,7 @@ use crate::hashing::init_hash_db;
 use crate::cli::Cli;
 use crate::config::{load_config_from_file, print_basic_config};
 use crate::notifiers::Dispatcher;
-use crate::persist::check_files;
+use crate::persist::validate_hashes;
 
 mod authentication_logs;
 mod cli;
@@ -45,7 +45,7 @@ async fn main() {
     if args.init == true {
         init_hash_db(&dispatcher, &config).await;
     } else if args.scan == true {
-        check_files(&dispatcher)
+        validate_hashes(&dispatcher)
             .await
             .expect("Checking files failed");
     } else if args.watch_authentication {
@@ -53,6 +53,6 @@ async fn main() {
     }
     debug!("Time elapsed to hash: {:?}", start.elapsed());
 
-    info!("Waiting a second for dispatcher to complete");
+    debug!("Waiting a second for dispatcher to complete");
     time::sleep(Duration::from_millis(TIMEOUT)).await;
 }

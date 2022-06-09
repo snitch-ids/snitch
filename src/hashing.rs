@@ -65,11 +65,7 @@ pub async fn init_hash_db(dispatcher: &Dispatcher, config: &Config) {
             .await
             .expect("Failed updating hash");
     }
-
-    let p = Path::new(NITRO_DATABASE_PATH);
-    upsert_hash_tree(&db, dispatcher, p)
-        .await
-        .expect("Failed updating hash");
+    info!("database checksum: {}", db.checksum().unwrap());
 }
 
 /// Returnes `true` if `entry` is either a symbolic link or a directory

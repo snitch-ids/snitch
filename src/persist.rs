@@ -49,9 +49,8 @@ pub fn upsert_hashes(db: &sled::Db, fp: &Path, file_hash: &str) -> Result<(), Ha
     Ok(())
 }
 
-pub async fn check_files(dispatcher: &Dispatcher) -> Result<(), HashMismatch> {
+pub async fn validate_hashes(dispatcher: &Dispatcher) -> Result<(), HashMismatch> {
     let db = sled::open(NITRO_DATABASE_PATH).unwrap();
-
     for key in db.iter() {
         let vec = key.unwrap();
         let vec_str = from_utf8(&vec.0).unwrap();
@@ -75,6 +74,7 @@ pub async fn check_files(dispatcher: &Dispatcher) -> Result<(), HashMismatch> {
             dispatcher.dispatch(&e);
         });
     }
+    info!("database checksum: {}", db.checksum().unwrap());
 
     Ok(())
 }
