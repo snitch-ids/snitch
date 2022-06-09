@@ -14,7 +14,7 @@ impl Dispatcher {
         let message = notification.message();
         let message_mail = message.clone();
         let message_telegram = message.clone();
-
+        info!("sent {}", notification.message());
         if self.enable_telegram {
             tokio::spawn(async move {
                 telegram::send_telegram(message_telegram)

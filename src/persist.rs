@@ -7,7 +7,6 @@ use crate::{
     notifiers::{BasicNotification, Dispatcher, Notification},
 };
 use sled;
-use walkdir::DirEntry;
 
 pub struct HashMismatch {
     pub file_path: String,
@@ -15,13 +14,13 @@ pub struct HashMismatch {
 
 impl fmt::Display for HashMismatch {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Hashes dont match")
+        write!(f, "Hashes dont match: {}", self.file_path)
     }
 }
 
 impl fmt::Debug for HashMismatch {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "HashMismatch {{ file_path: {} }}", self.file_path)
+        write!(f, "File was modified: {{ file_path: {} }}", self.file_path)
     }
 }
 
@@ -31,8 +30,8 @@ impl Notification for HashMismatch {
     }
 }
 
-pub fn upsert_hashes(db: &sled::Db, fp: DirEntry, file_hash: &str) -> Result<(), HashMismatch> {
-    let file_path = fp.path().to_str().unwrap();
+pub fn upsert_hashes(db: &sled::Db, fp: &Path, file_hash: &str) -> Result<(), HashMismatch> {
+    let file_path = fp.to_str().unwrap();
     let old_value = db
         .insert(file_path, file_hash)
         .expect("something went wrong persisting the hash");
@@ -41,7 +40,7 @@ pub fn upsert_hashes(db: &sled::Db, fp: DirEntry, file_hash: &str) -> Result<(),
         Some(v) => {
             if v != file_hash {
                 return Err(HashMismatch {
-                    file_path: String::from(file_path),
+                    file_path: file_path.to_string(),
                 });
             }
         }

@@ -44,10 +44,7 @@ pub async fn hash_file(path: &Path) -> std::io::Result<String> {
 pub async fn init_hash_db(dispatcher: &Dispatcher, config: &Config) {
     let database_path = Path::new(NITRO_DATABASE_PATH);
     if database_path.exists() {
-        info!(
-            "database already found at: {:?}. Deleting.",
-            database_path
-        );
+        info!("database already found at: {:?}. Deleting.", database_path);
         std::fs::remove_dir_all(database_path).expect("Failed deleting database.");
     }
     let db_config = sled::Config::default()
@@ -68,6 +65,11 @@ pub async fn init_hash_db(dispatcher: &Dispatcher, config: &Config) {
             .await
             .expect("Failed updating hash");
     }
+
+    let p = Path::new(NITRO_DATABASE_PATH);
+    upsert_hash_tree(&db, dispatcher, p)
+        .await
+        .expect("Failed updating hash");
 }
 
 /// Returnes `true` if `entry` is either a symbolic link or a directory
@@ -78,7 +80,7 @@ fn is_symlink_or_directory(entry: &DirEntry) -> bool {
 /// Filters excluded paths such as the database path of nitro
 fn is_excluded(entry: &DirEntry) -> bool {
     entry
-        .file_name()
+        .path()
         .to_str()
         .map(|s| s.starts_with(NITRO_DATABASE_PATH))
         .unwrap_or(false)
@@ -104,9 +106,8 @@ async fn upsert_hash_tree(
             continue;
         }
 
-        let fp = file_path_entry.clone();
-        let hash = hashing::hash_file(fp.path()).await.unwrap();
-        upsert_hashes(&db, file_path_entry, &hash).unwrap_or_else(|e| {
+        let hash = hashing::hash_file(file_path_entry.path()).await.unwrap();
+        upsert_hashes(&db, file_path_entry.path(), &hash).unwrap_or_else(|e| {
             dispatcher.dispatch(&e);
         });
         index += 1;

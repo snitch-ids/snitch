@@ -40,7 +40,7 @@ async fn main() {
     }
     let config = load_config_from_file(Path::new(DEFAULT_CONFIG)).unwrap();
 
-    let dispatcher = Dispatcher::new(false, true);
+    let dispatcher = Dispatcher::new(false, false);
     let start = Instant::now();
     if args.init == true {
         init_hash_db(&dispatcher, &config).await;
@@ -51,7 +51,7 @@ async fn main() {
     } else if args.watch_authentication {
         watch_authentication_logs(&dispatcher, &config).await;
     }
-    info!("Time elapsed to hash: {:?}", start.elapsed());
+    debug!("Time elapsed to hash: {:?}", start.elapsed());
 
     info!("Waiting a second for dispatcher to complete");
     time::sleep(Duration::from_millis(TIMEOUT)).await;

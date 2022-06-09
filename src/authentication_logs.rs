@@ -26,7 +26,9 @@ pub async fn watch_authentication_logs(dispatcher: &Dispatcher, config: &Config)
 
     loop {
         contents.truncate(0);
-        file.seek(SeekFrom::Start(position as u64)).await.expect("Failed seeking log position!");
+        file.seek(SeekFrom::Start(position as u64))
+            .await
+            .expect("Failed seeking log position!");
         position += file.read_to_end(&mut contents).await.unwrap();
 
         let contents_str = from_utf8(&contents).unwrap();

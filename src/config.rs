@@ -37,7 +37,7 @@ impl Config {
             authentication_logs: "/var/log/auth.log".to_owned(),
             notifications: Dispatcher {
                 enable_email: false,
-                enable_telegram: true,
+                enable_telegram: false,
             },
         }
     }
