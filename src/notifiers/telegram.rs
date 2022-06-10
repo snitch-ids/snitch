@@ -4,7 +4,7 @@ use std::env;
 use reqwest;
 use reqwest::header::HeaderMap;
 
-pub async fn send_telegram(message: String) -> Result<(), reqwest::Error> {
+pub async fn send_message(message: String) -> Result<(), reqwest::Error> {
     let token = env::var("TELEGRAM_BOT_TOKEN").expect("TELEGRAM_BOT_TOKEN not set\n");
     let chat_id = env::var("TELEGRAM_CHAT_ID").expect("TELEGRAM_CHAT_ID not set\n");
     let url = format!("https://api.telegram.org/bot{}/sendMessage", token);
@@ -36,4 +36,16 @@ pub async fn send_telegram(message: String) -> Result<(), reqwest::Error> {
         .await?;
     debug!("sent telegram message");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::send_message;
+
+    /// Tests dispatching message. Requires configured TELEGRAM token
+    #[tokio::test]
+    async fn test_send_message() {
+        send_message("unit test".to_string()).await.unwrap();
+    }
 }

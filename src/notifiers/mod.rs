@@ -11,21 +11,14 @@ pub struct Dispatcher {
 
 impl Dispatcher {
     pub fn dispatch<T: Notification>(&self, notification: &T) {
+        debug!("dispatching: {}", notification.message());
         let message = notification.message();
-        let message_mail = message.clone();
-        let message_telegram = message.clone();
-        info!("sent {}", notification.message());
+
         if self.enable_telegram {
-            tokio::spawn(async move {
-                telegram::send_telegram(message_telegram)
-                    .await
-                    .expect("Failed sending notification via telegram");
-            });
+            Dispatcher::send_telegram(&message);
         }
         if self.enable_email {
-            tokio::spawn(async move {
-                email::send_mail(message_mail).await;
-            });
+            Dispatcher::send_mail(&message);
         }
     }
 
@@ -34,6 +27,22 @@ impl Dispatcher {
             enable_email,
             enable_telegram,
         }
+    }
+
+    fn send_telegram(message: &String) {
+        let message_telegram = message.clone();
+        tokio::spawn(async move {
+            telegram::send_message(message_telegram)
+                .await
+                .expect("Failed sending notification via telegram");
+        });
+    }
+
+    fn send_mail(message: &String) {
+        let message_mail = message.clone();
+        tokio::spawn(async move {
+            email::send_message(message_mail).await;
+        });
     }
 }
 

@@ -27,7 +27,6 @@ mod notifiers;
 mod persist;
 
 static DEFAULT_CONFIG: &str = "/etc/nitro/config.yaml";
-static TIMEOUT: u64 = 1000;
 
 #[tokio::main]
 async fn main() {
@@ -54,5 +53,5 @@ async fn main() {
     debug!("Time elapsed to hash: {:?}", start.elapsed());
 
     debug!("Waiting a second for dispatcher to complete");
-    time::sleep(Duration::from_millis(TIMEOUT)).await;
+    time::sleep(Duration::from_millis(1000)).await;
 }
