@@ -67,6 +67,10 @@ All files found under `directories` in that file will be integrity checked.
 
    Requires environment variables: `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
 
+### Slack
+
+   Requires environment variables: `SLACK_WEBHOOK_URL` and `SLACK_CHANNEL`.
+
 ### Email
 
    Requires environment variables: `SMTP_SERVER`, `SMTP_USER` and `SMTP_PASSWORD`. Note, that storing email credentials on your system in clear text is a rather high risk once someone gained access. Thus, this should rather be used for development for now.

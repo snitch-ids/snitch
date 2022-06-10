@@ -1,6 +1,6 @@
+use std::fmt;
 use std::path::Path;
 use std::str::from_utf8;
-use std::fmt;
 
 use crate::{
     hashing::{self, NITRO_DATABASE_PATH},

@@ -1,12 +1,14 @@
 use serde::{Deserialize, Serialize};
 
 pub mod email;
+pub mod slack;
 pub mod telegram;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Dispatcher {
     pub enable_email: bool,
     pub enable_telegram: bool,
+    pub enable_slack: bool,
 }
 
 impl Dispatcher {
@@ -20,12 +22,16 @@ impl Dispatcher {
         if self.enable_email {
             Dispatcher::send_mail(&message);
         }
+        if self.enable_slack {
+            Dispatcher::send_slack(&message);
+        }
     }
 
-    pub fn new(enable_email: bool, enable_telegram: bool) -> Dispatcher {
+    pub fn new(enable_email: bool, enable_telegram: bool, enable_slack: bool) -> Dispatcher {
         Dispatcher {
             enable_email,
             enable_telegram,
+            enable_slack,
         }
     }
 
@@ -42,6 +48,13 @@ impl Dispatcher {
         let message_mail = message.clone();
         tokio::spawn(async move {
             email::send_message(message_mail).await;
+        });
+    }
+
+    fn send_slack(message: &String) {
+        let message_mail = message.clone();
+        tokio::spawn(async move {
+            slack::send_message(message_mail).await;
         });
     }
 }
