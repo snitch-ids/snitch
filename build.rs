@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::process::exit;
 
-static DEFAULT_CONFIG_PATH: &str = "/etc/nitro/";
+static DEFAULT_CONFIG_PATH: &str = "/etc/snitch/";
 
 /// Print debugging output to console as warning.
 macro_rules! print_create_failure {
@@ -11,7 +11,7 @@ macro_rules! print_create_failure {
     }
 }
 
-/// Attempts to create /etc/nitro/config.yaml with a default configuration.
+/// Attempts to create /etc/snitch/config.yaml with a default configuration.
 fn main() {
     fs::create_dir(Path::new(DEFAULT_CONFIG_PATH)).unwrap_or_else(|error| {
         let kind = error.kind();
