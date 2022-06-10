@@ -1,13 +1,13 @@
-Nitro - Intrusion Notification
-==============================
+Snitch - Intrusion Notification
+===============================
 
-[![Rust](https://github.com/HerrMuellerluedenscheid/nitro/actions/workflows/rust.yml/badge.svg)](https://github.com/HerrMuellerluedenscheid/nitro/actions/workflows/rust.yml)
+[![Rust](https://github.com/HerrMuellerluedenscheid/snitch/actions/workflows/rust.yml/badge.svg)](https://github.com/HerrMuellerluedenscheid/snitch/actions/workflows/rust.yml)
 
-Nitro is a file integrity and authentication monitoring system.
+Snitch is a file integrity and authentication monitoring system.
 
- * Nitro calculates and stores hashes of files found by recursing user defined directory trees. If a file hash changes Nitro will send a warning to the user (via email or telegram) to notify about the modified file.
+ * Snitch calculates and stores hashes of files found by recursing user defined directory trees. If a file hash changes Snitch will send a warning to the user (via email or telegram) to notify about the modified file.
 
- * Nitro also watches authentication logs and sends a notification when user logs in.
+ * Snitch also watches authentication logs and sends a notification when user logs in.
 
 Requirements
 ------------
@@ -36,26 +36,26 @@ Usage
 
 Run the initial scan
 ```
-nitro --init
+snitch --init
 ```
 
 and trigger a scan to verify file integrity with
 ```
-nitro --scan
+snitch --scan
 ```
 
 To start watching authentication logs use:
 ```
-nitro --watch
+snitch --watch
 ```
 
 Configuration
 -------------
 
-Nitro can be configured in `etc/nitro/config.yaml`. If that file does not exist you can run
+Snitch can be configured in `etc/snitch/config.yaml`. If that file does not exist you can run
 
 ```
-nitro --demo-config > /etc/nitro/config.yaml
+snitch --demo-config > /etc/snitch/config.yaml
 ```
 to create a template that should be fine on `Ubuntu` and `Debian`.
 

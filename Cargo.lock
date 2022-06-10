@@ -629,26 +629,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nitro"
-version = "0.1.1"
-dependencies = [
- "clap",
- "data-encoding",
- "env_logger",
- "indicatif",
- "lettre",
- "log",
- "regex",
- "reqwest",
- "ring",
- "serde",
- "serde_yaml",
- "sled",
- "tokio",
- "walkdir",
-]
-
-[[package]]
 name = "nom"
 version = "7.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1083,6 +1063,26 @@ name = "smallvec"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2dd574626839106c320a323308629dcb1acfc96e32a8cba364ddc61ac23ee83"
+
+[[package]]
+name = "snitch"
+version = "0.1.1"
+dependencies = [
+ "clap",
+ "data-encoding",
+ "env_logger",
+ "indicatif",
+ "lettre",
+ "log",
+ "regex",
+ "reqwest",
+ "ring",
+ "serde",
+ "serde_yaml",
+ "sled",
+ "tokio",
+ "walkdir",
+]
 
 [[package]]
 name = "socket2"
