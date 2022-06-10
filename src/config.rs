@@ -38,6 +38,7 @@ impl Config {
             notifications: Dispatcher {
                 enable_email: false,
                 enable_telegram: false,
+                enable_slack: false,
             },
         }
     }
