@@ -26,7 +26,7 @@ mod hashing;
 mod notifiers;
 mod persist;
 
-static DEFAULT_CONFIG: &str = "/etc/nitro/config.yaml";
+static DEFAULT_CONFIG: &str = "/etc/snitch/config.yaml";
 
 #[tokio::main]
 async fn main() {
@@ -54,4 +54,16 @@ async fn main() {
 
     debug!("Waiting a second for dispatcher to complete");
     time::sleep(Duration::from_millis(1000)).await;
+}
+
+#[cfg(test)]
+pub mod test_util {
+    use chrono::Utc;
+
+    pub fn get_test_message() -> String {
+        let host_str = hostname::get().unwrap();
+        let host = host_str.to_str().unwrap();
+        let now = Utc::now();
+        format!("unit test {:?}\nhost: {}", now, host)
+    }
 }

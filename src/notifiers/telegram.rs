@@ -42,10 +42,12 @@ pub async fn send_message(message: String) -> Result<(), reqwest::Error> {
 mod tests {
 
     use super::send_message;
+    use crate::test_util::get_test_message;
 
-    /// Tests dispatching message. Requires configured TELEGRAM token
+    /// Tests dispatching message. Requires configured TELEGRAM configration
     #[tokio::test]
     async fn test_send_message() {
-        send_message("unit test".to_string()).await.unwrap();
+        let message = get_test_message();
+        send_message(message).await.unwrap();
     }
 }
