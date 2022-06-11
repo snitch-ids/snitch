@@ -39,7 +39,7 @@ async fn main() {
     }
     let config = load_config_from_file(Path::new(DEFAULT_CONFIG)).unwrap();
 
-    let dispatcher = Dispatcher::new(false, false);
+    let dispatcher = Dispatcher::new(false, false, false);
     let start = Instant::now();
     if args.init == true {
         init_hash_db(&dispatcher, &config).await;
