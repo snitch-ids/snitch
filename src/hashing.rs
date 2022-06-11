@@ -96,7 +96,7 @@ async fn upsert_hash_tree(
 
     for entry in walker {
         let file_path_entry = entry?.to_owned();
-
+        println!("{:?}", file_path_entry);
         if is_symlink_or_directory(&file_path_entry) {
             continue;
         }
