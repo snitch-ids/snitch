@@ -16,7 +16,6 @@ use crate::hashing::init_hash_db;
 
 use crate::cli::Cli;
 use crate::config::{load_config_from_file, print_basic_config};
-use crate::notifiers::Dispatcher;
 use crate::persist::validate_hashes;
 
 mod authentication_logs;
@@ -25,8 +24,6 @@ mod config;
 mod hashing;
 mod notifiers;
 mod persist;
-
-static DEFAULT_CONFIG: &str = "/etc/snitch/config.yaml";
 
 #[tokio::main]
 async fn main() {
@@ -37,18 +34,17 @@ async fn main() {
         print_basic_config();
         process::exit(0);
     }
-    let config = load_config_from_file(Path::new(DEFAULT_CONFIG)).unwrap();
 
-    let dispatcher = Dispatcher::new(false, false, false);
+    let config = load_config_from_file(Path::new(&args.config_file)).unwrap();
     let start = Instant::now();
     if args.init == true {
-        init_hash_db(&dispatcher, &config).await;
+        init_hash_db(config).await;
     } else if args.scan == true {
-        validate_hashes(&dispatcher)
+        validate_hashes(&config.notifications)
             .await
             .expect("Checking files failed");
     } else if args.watch_authentication {
-        watch_authentication_logs(&dispatcher, &config).await;
+        watch_authentication_logs(&config.notifications, &config).await;
     }
     debug!("Time elapsed to hash: {:?}", start.elapsed());
 

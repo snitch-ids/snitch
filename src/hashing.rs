@@ -41,7 +41,7 @@ pub async fn hash_file(path: &Path) -> std::io::Result<String> {
 }
 
 /// Initialize the file hash database
-pub async fn init_hash_db(dispatcher: &Dispatcher, config: &Config) {
+pub async fn init_hash_db(config: Config) {
     let database_path = Path::new(NITRO_DATABASE_PATH);
     if database_path.exists() {
         info!("database already found at: {:?}. Deleting.", database_path);
@@ -60,7 +60,7 @@ pub async fn init_hash_db(dispatcher: &Dispatcher, config: &Config) {
             continue;
         }
         info!("process directory: {:?}", &directory);
-        upsert_hash_tree(&db, dispatcher, directory)
+        upsert_hash_tree(&db, &config.notifications, directory)
             .await
             .expect("Failed updating hash");
     }
