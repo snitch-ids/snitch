@@ -54,7 +54,7 @@ impl Dispatcher {
     fn send_slack(message: &String) {
         let message_mail = message.clone();
         tokio::spawn(async move {
-            slack::send_message(message_mail).await;
+            slack::send_message(message_mail).await.unwrap();
         });
     }
 }

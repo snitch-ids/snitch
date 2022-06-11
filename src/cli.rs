@@ -16,7 +16,7 @@ pub struct Cli {
     #[clap(short, long)]
     pub watch_authentication: bool,
 
-    /// print a demo configuration (e.g. as a template for /etc/nitro/config.yaml)
+    /// print a demo configuration (e.g. as a template for /etc/snitch/config.yaml)
     #[clap(long)]
     pub demo_config: bool,
 }

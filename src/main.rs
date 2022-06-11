@@ -26,7 +26,7 @@ mod hashing;
 mod notifiers;
 mod persist;
 
-static DEFAULT_CONFIG: &str = "/etc/nitro/config.yaml";
+static DEFAULT_CONFIG: &str = "/etc/snitch/config.yaml";
 
 #[tokio::main]
 async fn main() {

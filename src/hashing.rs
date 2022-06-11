@@ -12,7 +12,7 @@ use crate::hashing;
 use crate::notifiers::Dispatcher;
 use crate::persist::upsert_hashes;
 
-pub static NITRO_DATABASE_PATH: &str = "/etc/nitro/db";
+pub static NITRO_DATABASE_PATH: &str = "/etc/snitch/db";
 
 /// Calculate a `SHA256` hash from `reader`.
 async fn sha256_digest<R: Read>(mut reader: R) -> std::io::Result<Digest> {
@@ -72,7 +72,7 @@ fn is_symlink_or_directory(entry: &DirEntry) -> bool {
     entry.file_type().is_dir() || entry.path().is_symlink()
 }
 
-/// Filters excluded paths such as the database path of nitro
+/// Filters excluded paths such as the database path of snitch
 fn is_excluded(entry: &DirEntry) -> bool {
     entry
         .path()

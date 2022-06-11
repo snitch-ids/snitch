@@ -47,7 +47,7 @@ impl Config {
 /// Load the configuration from a file and return a [`Config`](Config) struct.
 pub fn load_config_from_file(path: &Path) -> Result<Config, serde_yaml::Error> {
     if !path.exists() {
-        println!("No config file: {:?}\nTip: run\n\n  nitro --demo-config > /etc/nitro/config.yaml\n\nto get started.", path);
+        println!("No config file: {:?}\nTip: run\n\n  snitch --demo-config > /etc/snitch/config.yaml\n\nto get started.", path);
         process::exit(1);
     }
     let reader = std::fs::File::open(path).unwrap();
