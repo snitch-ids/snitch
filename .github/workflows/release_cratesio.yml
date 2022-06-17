@@ -1,10 +1,10 @@
 name: Release on crates.io
 
-on:
-  workflow_dispatch:
-  push:
-    tags:
-      - '*.*.*'
+# on:
+#   workflow_dispatch:
+#   push:
+#     tags:
+#       - '*.*.*'
 
 env:
   CARGO_TERM_COLOR: always
@@ -21,7 +21,8 @@ jobs:
         echo $RELEASE_VERSION
         echo ${{ env.RELEASE_VERSION }}
     - name: test test
-      run: $RELEASE_VERSION == cargo run -- --version
+      shell: bash
+      run: $RELEASE_VERSION = cargo run -- --version
 
     - name: Build
       run: cargo build --verbose
