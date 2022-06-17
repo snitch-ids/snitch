@@ -34,6 +34,7 @@ directories:
 notifications:
   enable_email: false
   enable_telegram: true
+  enable_slack: true
 authentication_logs: /var/log/auth.log
 ",
     )
