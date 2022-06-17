@@ -16,6 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
+    - name: Verify tag
+      run: |
+        echo $RELEASE_VERSION
+        echo ${{ env.RELEASE_VERSION }}
+    - name: test test
+      run: $RELEASE_VERSION == cargo run -- --version
+
     - name: Build
       run: cargo build --verbose
     - name: Run tests
