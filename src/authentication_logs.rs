@@ -2,7 +2,7 @@ use std::str::from_utf8;
 use std::string::String;
 use std::time::Duration;
 
-use clap::lazy_static::lazy_static;
+use lazy_static::lazy_static;
 use regex::{Captures, Regex};
 use tokio::fs::File;
 use tokio::io::SeekFrom;
