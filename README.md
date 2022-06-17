@@ -28,8 +28,10 @@ Installation
 ------------
 
 ```
-cargo install --path .
+cargo install snitch
 ```
+
+Note that access to root level folders and monitoring authentication logs usually requires an installation as `root`.
 
 Usage
 -----

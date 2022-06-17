@@ -1,0 +1,36 @@
+name: Release on crates.io
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - '*.*.*'
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_REGISTRY_TOKEN: ${{secrets.CRATES_IO_TOKEN}}
+
+jobs:
+
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
+
+  publish-crates-io:
+    runs-on: ubuntu-latest
+    needs:
+      - build-and-test
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build
+      run: cargo build --release --verbose
+    - name: cargo login
+      run: cargo login
+    - name: cargo publish
+      run: cargo publish
