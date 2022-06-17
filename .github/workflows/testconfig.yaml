@@ -1,0 +1,12 @@
+---
+directories:
+  - /bin
+  - /sbin
+  - /boot
+notifications:
+  enable_email: false
+  enable_telegram: true
+  enable_slack: false
+authentication_logs: /var/log/auth.log
+snitch_root: /tmp/snitch
+
