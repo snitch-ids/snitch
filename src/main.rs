@@ -25,10 +25,19 @@ mod hashing;
 mod notifiers;
 mod persist;
 
+fn setup_logging(args: &Cli) {
+    let filter_level = match args.verbose {
+        true => LevelFilter::Debug,
+        false => LevelFilter::Info,
+    };
+
+    Builder::new().filter_level(filter_level).init();
+}
+
 #[tokio::main]
 async fn main() {
-    Builder::new().filter_level(LevelFilter::Info).init();
     let args = Cli::parse();
+    setup_logging(&args);
 
     if args.demo_config == true {
         print_basic_config();
@@ -37,18 +46,18 @@ async fn main() {
 
     let config = load_config_from_file(Path::new(&args.config_file)).unwrap();
     let start = Instant::now();
-    if args.init == true {
+    if args.init {
         init_hash_db(config).await;
-    } else if args.scan == true {
+    } else if args.scan {
         validate_hashes(&config.notifications)
             .await
             .expect("Checking files failed");
     } else if args.watch_authentication {
         watch_authentication_logs(&config.notifications, &config).await;
     }
-    debug!("Time elapsed to hash: {:?}", start.elapsed());
 
-    debug!("Waiting a second for dispatcher to complete");
+    debug!("Time elapsed: {:?}", start.elapsed());
+    // Waiting a second for dispatcher to complete
     time::sleep(Duration::from_millis(1000)).await;
 }
 

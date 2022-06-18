@@ -15,19 +15,19 @@ pub struct HashMismatch {
 
 impl fmt::Display for HashMismatch {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Hashes dont match: {}", self.file_path)
+        write!(f, "File was modified: {}", self.file_path)
     }
 }
 
 impl fmt::Debug for HashMismatch {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "File was modified: {{ file_path: {} }}", self.file_path)
+        write!(f, "File was modified: {}", self.file_path)
     }
 }
 
 impl Notification for HashMismatch {
     fn message(&self) -> String {
-        self.file_path.to_string()
+        format!("File was modified: {}", self.file_path)
     }
 }
 
@@ -54,6 +54,7 @@ pub async fn validate_hashes(dispatcher: &Dispatcher) -> Result<(), HashMismatch
     let db = sled::open(NITRO_DATABASE_PATH).unwrap();
     let n_items = db.len() as u64;
     let pb = ProgressBar::new(n_items);
+    let mut messages: Vec<HashMismatch> = vec![];
 
     for key in db.iter() {
         pb.inc(1);
@@ -77,9 +78,13 @@ pub async fn validate_hashes(dispatcher: &Dispatcher) -> Result<(), HashMismatch
 
         validate_hash(fp, former_hash).await.unwrap_or_else(|e| {
             dispatcher.dispatch(&e);
+            messages.push(e);
         });
     }
     pb.finish_with_message("done");
+    for message in messages.pop() {
+        warn!("{:?}", message);
+    }
     info!("database checksum: {}", db.checksum().unwrap());
 
     Ok(())

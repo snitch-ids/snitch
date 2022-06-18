@@ -11,9 +11,18 @@ pub struct Dispatcher {
     pub enable_slack: bool,
 }
 
+impl Default for Dispatcher {
+    fn default() -> Self {
+        Dispatcher {
+            enable_email: false,
+            enable_telegram: false,
+            enable_slack: false,
+        }
+    }
+}
+
 impl Dispatcher {
     pub fn dispatch<T: Notification>(&self, notification: &T) {
-        debug!("dispatching: {}", notification.message());
         let message = notification.message();
 
         if self.enable_telegram {
@@ -24,14 +33,6 @@ impl Dispatcher {
         }
         if self.enable_slack {
             Dispatcher::send_slack(&message);
-        }
-    }
-
-    pub fn new(enable_email: bool, enable_telegram: bool, enable_slack: bool) -> Dispatcher {
-        Dispatcher {
-            enable_email,
-            enable_telegram,
-            enable_slack,
         }
     }
 
