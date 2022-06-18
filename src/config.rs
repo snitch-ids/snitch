@@ -4,7 +4,7 @@ use std::process;
 
 use crate::notifiers::Dispatcher;
 
-/// Nitro configurations
+/// Snitch configurations
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     pub directories: Vec<String>,

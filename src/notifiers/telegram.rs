@@ -11,7 +11,7 @@ pub async fn send_message(message: String) -> Result<(), reqwest::Error> {
 
     let mut params = HashMap::new();
 
-    params.insert("text", format!("<i>Nitro</i>\n{}", message));
+    params.insert("text", format!("<i>Snitch</i>\n{}", message));
     params.insert("chat_id", chat_id);
     params.insert("parse_mode", "html".to_owned());
 

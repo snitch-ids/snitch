@@ -11,7 +11,7 @@ pub async fn send_message(file_path: String) {
     let smtp_server = env::var("SMTP_SERVER").expect("environment variable SMTP_SERVER not set");
 
     let email = Message::builder()
-        .from("Nitro <noreply@intrusion.detection>".parse().unwrap())
+        .from("Snitch <noreply@intrusion.detection>".parse().unwrap())
         .reply_to("noreply@intrusion.detection".parse().unwrap())
         .to("marius.kriegerowski@gmail.com".parse().unwrap())
         .subject("Intrusion Detected")

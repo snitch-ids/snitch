@@ -1,0 +1,14 @@
+[Unit]
+Description=Snitch login watcher
+After=network.target
+ConditionPathExists=/etc/snitch/environment
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+ExecStart=/root/.cargo/bin/snitch -w
+EnvironmentFile=/etc/snitch/environment
+
+[Install]
+WantedBy=multi-user.target
