@@ -72,7 +72,7 @@ impl RootElevation {
 impl Notification for RootElevation {
     fn message(&self) -> String {
         format!(
-            "use <b>{}</b> just become root on <code>{}</code>\n{}",
+            "User <b>{}</b> just become root on <code>{}</code>\n{}",
             self.username, self.hostname, self.datetime
         )
         .to_string()
