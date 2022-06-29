@@ -12,7 +12,9 @@ Snitch is a file integrity and authentication monitoring system.
 Requirements
 ------------
 
-This is work in progress that requires `rust nightly` features:
+First, make sure that you have the [rust compiler](https://www.rust-lang.org/tools/install) installed.
+
+`Snitch` is work in progress that requires `rust nightly` features:
 
 ```
 rustup default nightly
