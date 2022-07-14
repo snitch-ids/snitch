@@ -4,12 +4,11 @@ extern crate log;
 
 use std::path::Path;
 use std::process;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use clap::StructOpt;
 use env_logger::Builder;
 use log::LevelFilter;
-use tokio::time;
 
 use crate::authentication_logs::watch_authentication_logs;
 use crate::hashing::init_hash_db;
@@ -47,18 +46,25 @@ async fn main() {
     let config = load_config_from_file(Path::new(&args.config_file)).unwrap();
     let start = Instant::now();
     if args.init {
-        init_hash_db(config).await;
-    } else if args.scan {
-        validate_hashes(&config.notifications)
+        init_hash_db(config)
             .await
+            .map_err(|err| {
+                error!("{err}");
+                process::exit(1);
+            })
+            .unwrap();
+        debug!("Time elapsed: {:?}", start.elapsed());
+    } else if args.scan {
+        validate_hashes(config)
+            .await
+            .map_err(|err| {
+                println!("Failed scaning files: {err}");
+                process::exit(1);
+            })
             .expect("Checking files failed");
     } else if args.watch_authentication {
         watch_authentication_logs(&config.notifications, &config).await;
     }
-
-    debug!("Time elapsed: {:?}", start.elapsed());
-    // Waiting a second for dispatcher to complete
-    time::sleep(Duration::from_millis(1000)).await;
 }
 
 #[cfg(test)]
