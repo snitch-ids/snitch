@@ -1,4 +1,6 @@
 use sled::Db;
+use std::error::{self, Error};
+use std::fmt;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
@@ -10,9 +12,11 @@ use walkdir::{DirEntry, WalkDir};
 use crate::config::Config;
 use crate::hashing;
 use crate::notifiers::Dispatcher;
-use crate::persist::upsert_hashes;
+use crate::persist::{open_database, upsert_hashes};
 
 pub static NITRO_DATABASE_PATH: &str = "/etc/snitch/db";
+
+type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
 
 /// Calculate a `SHA256` hash from `reader`.
 async fn sha256_digest<R: Read>(mut reader: R) -> std::io::Result<Digest> {
@@ -40,19 +44,34 @@ pub async fn hash_file(path: &Path) -> std::io::Result<String> {
     Ok(hash_digest)
 }
 
+#[derive(Debug)]
+pub enum HashDBError {
+    SledError(sled::Error),
+}
+
+impl Error for HashDBError {}
+
+impl fmt::Display for HashDBError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "An error occurred while interacting with the database!")
+    }
+}
+
+impl From<sled::Error> for HashDBError {
+    fn from(e: sled::Error) -> Self {
+        HashDBError::SledError(e)
+    }
+}
+
 /// Initialize the file hash database
-pub async fn init_hash_db(config: Config) {
+pub async fn init_hash_db(config: Config) -> Result<()> {
     let database_path = Path::new(NITRO_DATABASE_PATH);
     if database_path.exists() {
         info!("database already found at: {:?}. Deleting.", database_path);
         std::fs::remove_dir_all(database_path).expect("Failed deleting database.");
     }
-    let db_config = sled::Config::default()
-        .path(NITRO_DATABASE_PATH)
-        .cache_capacity(10_000_000_000)
-        .flush_every_ms(Some(10000000));
 
-    let db = db_config.open().unwrap();
+    let db = open_database()?;
 
     for directory in config.directories() {
         if !directory.exists() {
@@ -60,11 +79,10 @@ pub async fn init_hash_db(config: Config) {
             continue;
         }
         info!("process directory: {:?}", &directory);
-        upsert_hash_tree(&db, &config.notifications, directory)
-            .await
-            .expect("Failed updating hash");
+        upsert_hash_tree(&db, &config.notifications, directory).await?;
     }
-    info!("database checksum: {}", db.checksum().unwrap());
+    info!("database checksum: {}", db.checksum()?);
+    Ok(())
 }
 
 /// Returnes `true` if `entry` is either a symbolic link or a directory
@@ -95,12 +113,26 @@ async fn upsert_hash_tree(
         .filter_entry(|e| !is_excluded(e));
 
     for entry in walker {
-        let file_path_entry = entry?.to_owned();
+        let entry_checked = match entry {
+            Err(err) => {
+                warn!("{err}");
+                continue;
+            }
+            Ok(value) => value,
+        };
+
+        let file_path_entry = entry_checked.to_owned();
+
         if is_symlink_or_directory(&file_path_entry) {
             continue;
         }
+        let hash = hashing::hash_file(file_path_entry.path())
+            .await
+            .unwrap_or_else(|err| {
+                warn!("{err} on {:?}. Skipping.", file_path_entry.path());
+                format!("{:?}", err)
+            });
 
-        let hash = hashing::hash_file(file_path_entry.path()).await.unwrap();
         upsert_hashes(&db, file_path_entry.path(), &hash).unwrap_or_else(|e| {
             dispatcher.dispatch(&e);
         });

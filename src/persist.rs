@@ -1,13 +1,16 @@
-use std::fmt;
+use crate::config::Config;
 use std::path::Path;
 use std::str::from_utf8;
+use std::{error, fmt};
 
 use crate::{
     hashing::{self, NITRO_DATABASE_PATH},
-    notifiers::{BasicNotification, Dispatcher, Notification},
+    notifiers::{BasicNotification, Notification},
 };
 use indicatif::ProgressBar;
-use sled;
+use sled::{self, Db};
+
+type ResultPersist<T> = std::result::Result<T, Box<dyn error::Error>>;
 
 pub struct HashMismatch {
     pub file_path: String,
@@ -31,6 +34,20 @@ impl Notification for HashMismatch {
     }
 }
 
+pub fn open_database() -> ResultPersist<Db> {
+    let db_config = sled::Config::default()
+        .path(NITRO_DATABASE_PATH)
+        .cache_capacity(10_000_000_000)
+        .flush_every_ms(Some(10000000));
+
+    let db = db_config.open().map_err(|err| {
+        println!("Cannot open {NITRO_DATABASE_PATH}");
+        return err;
+    })?;
+
+    Ok(db)
+}
+
 pub fn upsert_hashes(db: &sled::Db, fp: &Path, file_hash: &str) -> Result<(), HashMismatch> {
     let file_path = fp.to_str().unwrap();
     let old_value = db
@@ -50,17 +67,21 @@ pub fn upsert_hashes(db: &sled::Db, fp: &Path, file_hash: &str) -> Result<(), Ha
     Ok(())
 }
 
-pub async fn validate_hashes(dispatcher: &Dispatcher) -> Result<(), HashMismatch> {
-    let db = sled::open(NITRO_DATABASE_PATH).unwrap();
+pub async fn validate_hashes(config: Config) -> ResultPersist<()> {
+    let dispatcher = config.notifications;
+    let db = sled::open(NITRO_DATABASE_PATH).map_err(|err| {
+        error!("Cannot open {NITRO_DATABASE_PATH}");
+        return err;
+    })?;
     let n_items = db.len() as u64;
     let pb = ProgressBar::new(n_items);
     let mut messages: Vec<HashMismatch> = vec![];
 
     for key in db.iter() {
         pb.inc(1);
-        let vec = key.unwrap();
-        let vec_str = from_utf8(&vec.0).unwrap();
-        let former_hash = from_utf8(&vec.1).unwrap();
+        let vec = key?;
+        let vec_str = from_utf8(&vec.0)?;
+        let former_hash = from_utf8(&vec.1)?;
 
         let fp = Path::new(&vec_str);
 
