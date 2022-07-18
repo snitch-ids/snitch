@@ -49,6 +49,7 @@ pub fn open_database() -> ResultPersist<Db> {
 }
 
 pub fn upsert_hashes(db: &sled::Db, fp: &Path, file_hash: &str) -> Result<(), HashMismatch> {
+    debug!("upserting hash for {:?}", fp);
     let file_path = fp.to_str().unwrap();
     let old_value = db
         .insert(file_path, file_hash)
@@ -57,6 +58,7 @@ pub fn upsert_hashes(db: &sled::Db, fp: &Path, file_hash: &str) -> Result<(), Ha
     match old_value {
         Some(v) => {
             if v != file_hash {
+                debug!("hash mismatch on: {file_path}");
                 return Err(HashMismatch {
                     file_path: file_path.to_string(),
                 });

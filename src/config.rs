@@ -12,10 +12,23 @@ pub struct Config {
     pub authentication_logs: String,
 }
 
+fn check_directory_exists(directory: &Path) -> bool {
+    if !directory.exists() {
+        warn!("no such directory: {:?}. Ignoring.", directory);
+        return false;
+    }
+    true
+}
+
 impl Config {
-    /// get directories as a vector of Paths.
+    /// get directories as a vector of Paths. Non-existent directories will be ignored with a warning.
     pub fn directories(&self) -> Vec<&Path> {
-        let paths = self.directories.iter().map(Path::new).collect();
+        let paths = self
+            .directories
+            .iter()
+            .map(Path::new)
+            .filter(|dir| check_directory_exists(dir))
+            .collect();
         paths
     }
 
@@ -34,7 +47,7 @@ impl Config {
             authentication_logs: "/var/log/auth.log".to_owned(),
             notifications: Dispatcher {
                 enable_email: false,
-                enable_telegram: false,
+                enable_telegram: true,
                 enable_slack: false,
             },
         }

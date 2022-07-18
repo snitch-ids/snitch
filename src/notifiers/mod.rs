@@ -14,6 +14,7 @@ pub struct Dispatcher {
 impl Dispatcher {
     pub fn dispatch<T: Notification>(&self, notification: &T) {
         let message = notification.message();
+        debug!("dispatching notification {message}");
 
         if self.enable_telegram {
             Dispatcher::send_telegram(&message);
