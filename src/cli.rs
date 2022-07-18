@@ -15,6 +15,10 @@ pub struct Cli {
     pub scan: bool,
 
     /// Start scanning authentication
+    #[clap(long)]
+    pub watch_files: bool,
+
+    /// Start scanning authentication
     #[clap(short, long)]
     pub watch_authentication: bool,
 

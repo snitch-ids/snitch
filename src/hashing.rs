@@ -4,9 +4,12 @@ use std::fmt;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
+extern crate notify;
 
 use data_encoding::HEXUPPER;
+use notify::{raw_watcher, RawEvent, RecursiveMode, Watcher};
 use ring::digest::{Context, Digest, SHA256};
+use std::sync::mpsc::channel;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::config::Config;
@@ -74,10 +77,6 @@ pub async fn init_hash_db(config: Config) -> Result<()> {
     let db = open_database()?;
 
     for directory in config.directories() {
-        if !directory.exists() {
-            warn!("no such directory: {:?}", directory);
-            continue;
-        }
         info!("process directory: {:?}", &directory);
         upsert_hash_tree(&db, &config.notifications, directory).await?;
     }
@@ -86,8 +85,8 @@ pub async fn init_hash_db(config: Config) -> Result<()> {
 }
 
 /// Returnes `true` if `entry` is either a symbolic link or a directory
-fn is_symlink_or_directory(entry: &DirEntry) -> bool {
-    entry.file_type().is_dir() || entry.path().is_symlink()
+fn is_symlink_or_directory(entry: &Path) -> bool {
+    entry.is_dir() || entry.is_symlink()
 }
 
 /// Filters excluded paths such as the database path of snitch
@@ -120,22 +119,58 @@ async fn upsert_hash_tree(
         };
 
         let file_path_entry = entry_checked.to_owned();
-
-        if is_symlink_or_directory(&file_path_entry) {
-            continue;
-        }
-        let hash = hashing::hash_file(file_path_entry.path())
-            .await
-            .unwrap_or_else(|err| {
-                warn!("{err} on {:?}. Skipping.", file_path_entry.path());
-                format!("{:?}", err)
-            });
-
-        upsert_hashes(db, file_path_entry.path(), &hash).unwrap_or_else(|e| {
-            dispatcher.dispatch(&e);
-        });
+        check_file_hash(file_path_entry.path(), db, dispatcher).await;
     }
 
     db.flush_async().await?;
     Ok(())
+}
+
+async fn check_file_hash(file_path_entry: &Path, db: &Db, dispatcher: &Dispatcher) {
+    debug!("checking file hash {:?}", file_path_entry);
+    if is_symlink_or_directory(file_path_entry) {
+        debug!("is symlink. skipping.");
+        return;
+    }
+    let hash = hashing::hash_file(file_path_entry)
+        .await
+        .unwrap_or_else(|err| {
+            warn!("{err} on {:?}. Skipping.", file_path_entry);
+            format!("{:?}", err)
+        });
+    upsert_hashes(db, file_path_entry, &hash).unwrap_or_else(|e| {
+        dispatcher.dispatch(&e);
+    });
+}
+
+pub async fn watch_files(config: Config) {
+    // Create a channel to receive the events.
+    let (tx, rx) = channel();
+
+    // Create a watcher object, delivering raw events.
+    // The notification back-end is selected based on the platform.
+    let mut watcher = raw_watcher(tx).unwrap();
+
+    // Add a path to be watched. All files and directories at that path and
+    // below will be monitored for changes.
+    for directory in config.directories() {
+        info!("adding watcher for {:?}", directory);
+        watcher.watch(directory, RecursiveMode::Recursive).unwrap();
+    }
+
+    let db = open_database().unwrap();
+
+    loop {
+        match rx.recv() {
+            Ok(RawEvent {
+                path: Some(path),
+                op: Ok(op),
+                cookie,
+            }) => {
+                check_file_hash(&path, &db, &config.notifications).await;
+            }
+            Ok(event) => println!("broken event: {:?}", event),
+            Err(e) => println!("watch error: {:?}", e),
+        }
+    }
 }

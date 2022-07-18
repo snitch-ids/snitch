@@ -11,7 +11,7 @@ use env_logger::Builder;
 use log::LevelFilter;
 
 use crate::authentication_logs::watch_authentication_logs;
-use crate::hashing::init_hash_db;
+use crate::hashing::{init_hash_db, watch_files};
 
 use crate::cli::Cli;
 use crate::config::{load_config_from_file, print_basic_config};
@@ -62,6 +62,8 @@ async fn main() {
                 process::exit(1);
             })
             .expect("Checking files failed");
+    } else if args.watch_files {
+        watch_files(config).await;
     } else if args.watch_authentication {
         watch_authentication_logs(&config.notifications, &config).await;
     }
