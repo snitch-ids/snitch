@@ -15,7 +15,7 @@ pub struct Config {
 impl Config {
     /// get directories as a vector of Paths.
     pub fn directories(&self) -> Vec<&Path> {
-        let paths = self.directories.iter().map(|dir| Path::new(dir)).collect();
+        let paths = self.directories.iter().map(Path::new).collect();
         paths
     }
 

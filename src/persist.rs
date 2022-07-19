@@ -42,7 +42,7 @@ pub fn open_database() -> ResultPersist<Db> {
 
     let db = db_config.open().map_err(|err| {
         println!("Cannot open {NITRO_DATABASE_PATH}");
-        return err;
+        err
     })?;
 
     Ok(db)
@@ -69,10 +69,7 @@ pub fn upsert_hashes(db: &sled::Db, fp: &Path, file_hash: &str) -> Result<(), Ha
 
 pub async fn validate_hashes(config: Config) -> ResultPersist<()> {
     let dispatcher = config.notifications;
-    let db = sled::open(NITRO_DATABASE_PATH).map_err(|err| {
-        error!("Cannot open {NITRO_DATABASE_PATH}");
-        return err;
-    })?;
+    let db = open_database()?;
     let n_items = db.len() as u64;
     let pb = ProgressBar::new(n_items);
     let mut messages: Vec<HashMismatch> = vec![];
@@ -92,7 +89,7 @@ pub async fn validate_hashes(config: Config) -> ResultPersist<()> {
             )
             .to_string();
 
-            let notification = BasicNotification { message: message };
+            let notification = BasicNotification { message };
             dispatcher.dispatch(&notification);
             continue;
         }
@@ -115,8 +112,12 @@ async fn validate_hash(fp: &Path, former_hash: &str) -> Result<(), HashMismatch>
     if !fp.exists() {
         warn!("the file does not exist anymore!! {}", fp.to_str().unwrap())
     }
-    let hash = hashing::hash_file(&fp).await;
-    if hash.unwrap() != former_hash {
+    let hash = hashing::hash_file(fp).await.unwrap_or_else(|err| {
+        warn!("{err} on {:?}. Skipping.", fp);
+        format!("{:?}", err)
+    });
+
+    if hash != former_hash {
         return Err(HashMismatch {
             file_path: String::from(fp.to_str().unwrap()),
         });

@@ -106,8 +106,6 @@ async fn upsert_hash_tree(
     dispatcher: &Dispatcher,
     start_path: &Path,
 ) -> std::io::Result<()> {
-    let mut index = 0;
-
     let walker = WalkDir::new(start_path)
         .into_iter()
         .filter_entry(|e| !is_excluded(e));
@@ -133,13 +131,11 @@ async fn upsert_hash_tree(
                 format!("{:?}", err)
             });
 
-        upsert_hashes(&db, file_path_entry.path(), &hash).unwrap_or_else(|e| {
+        upsert_hashes(db, file_path_entry.path(), &hash).unwrap_or_else(|e| {
             dispatcher.dispatch(&e);
         });
-        index += 1;
     }
 
     db.flush_async().await?;
-    info!("Hashed {} files", index);
     Ok(())
 }

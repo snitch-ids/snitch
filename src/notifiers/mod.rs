@@ -4,21 +4,11 @@ pub mod email;
 pub mod slack;
 pub mod telegram;
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct Dispatcher {
     pub enable_email: bool,
     pub enable_telegram: bool,
     pub enable_slack: bool,
-}
-
-impl Default for Dispatcher {
-    fn default() -> Self {
-        Dispatcher {
-            enable_email: false,
-            enable_telegram: false,
-            enable_slack: false,
-        }
-    }
 }
 
 impl Dispatcher {
@@ -36,8 +26,8 @@ impl Dispatcher {
         }
     }
 
-    fn send_telegram(message: &String) {
-        let message_telegram = message.clone();
+    fn send_telegram(message: &str) {
+        let message_telegram = message.to_owned();
         tokio::spawn(async move {
             telegram::send_message(message_telegram)
                 .await
@@ -45,15 +35,15 @@ impl Dispatcher {
         });
     }
 
-    fn send_mail(message: &String) {
-        let message_mail = message.clone();
+    fn send_mail(message: &str) {
+        let message_mail = message.to_owned();
         tokio::spawn(async move {
             email::send_message(message_mail).await;
         });
     }
 
-    fn send_slack(message: &String) {
-        let message_mail = message.clone();
+    fn send_slack(message: &str) {
+        let message_mail = message.to_owned();
         tokio::spawn(async move {
             slack::send_message(message_mail).await.unwrap();
         });
@@ -72,6 +62,6 @@ pub struct BasicNotification {
 
 impl Notification for BasicNotification {
     fn message(&self) -> String {
-        return self.message.clone();
+        self.message.clone()
     }
 }

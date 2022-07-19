@@ -33,13 +33,13 @@ pub async fn watch_authentication_logs(dispatcher: &Dispatcher, config: &Config)
 
         let contents_str = from_utf8(&contents).unwrap();
 
-        let logins = find_logins(&contents_str);
+        let logins = find_logins(contents_str);
         for login in logins.iter() {
             info!("logins {:?}", login);
             dispatcher.dispatch(login);
         }
 
-        let root_elevations = find_root_elevations(&contents_str);
+        let root_elevations = find_root_elevations(contents_str);
         for root_elecation in root_elevations.iter() {
             info!("root elevation {:?}", root_elecation);
             dispatcher.dispatch(root_elecation);
@@ -75,7 +75,6 @@ impl Notification for RootElevation {
             "User <b>{}</b> just become root on <code>{}</code>\n{}",
             self.username, self.hostname, self.datetime
         )
-        .to_string()
     }
 }
 
@@ -111,7 +110,6 @@ impl Notification for Login {
             "New login by <b>{}</b> from IP <code>{}</code> on <b>{}</b>\nmethod: {}\n{}",
             self.username, self.ip, self.hostname, self.method, self.datetime
         )
-        .to_string()
     }
 }
 

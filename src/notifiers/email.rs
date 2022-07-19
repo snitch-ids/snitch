@@ -15,7 +15,7 @@ pub async fn send_message(file_path: String) {
         .reply_to("noreply@intrusion.detection".parse().unwrap())
         .to("marius.kriegerowski@gmail.com".parse().unwrap())
         .subject("Intrusion Detected")
-        .body(String::from(format!("File: {}", file_path)))
+        .body(format!("File: {}", file_path))
         .unwrap();
 
     let credentials = Credentials::new(smtp_user, smtp_password);

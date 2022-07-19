@@ -38,7 +38,7 @@ async fn main() {
     let args = Cli::parse();
     setup_logging(&args);
 
-    if args.demo_config == true {
+    if args.demo_config {
         print_basic_config();
         process::exit(0);
     }
