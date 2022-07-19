@@ -4,6 +4,8 @@ description = "Intrusion detection and file integrity verification"
 version = "0.1.3"
 edition = "2021"
 license = "MIT"
+readme = "README.md"
+authors = ["Marius Kriegerowski <marius.kriegerowski@gmail.com>"]
 
 [dependencies]
 chrono = "0.4"
