@@ -1,12 +1,10 @@
-name: Release on crates.io
+name: build debian package
 
 on:
   workflow_dispatch:
   push:
     tags:
       - '*.*.*'
-  pull_request:
-    branches: [ main ]
 
 env:
   CARGO_TERM_COLOR: always
