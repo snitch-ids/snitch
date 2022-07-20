@@ -48,22 +48,27 @@ and trigger a scan to verify file integrity with
 snitch --scan
 ```
 
-To start watching authentication logs use:
+Watch authentication logs:
 ```
-snitch --watch
+snitch --watch-authentications
+```
+
+Watch for file changes:
+```
+snitch --watch-files
 ```
 
 Configuration
 -------------
 
-Snitch can be configured in `etc/snitch/config.yaml`. If that file does not exist you can run
+Snitch can be configured in `/etc/snitch/config.yaml`. If that file does not exist you can run
 
 ```
 snitch --demo-config > /etc/snitch/config.yaml
 ```
 to create a template that should be fine on `Ubuntu` and `Debian`.
 
-All files found under `directories` in that file will be integrity checked. 
+All files found under `directories` in that file will be integrity checked or watched.
 
 ## Notification Channels
 

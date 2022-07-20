@@ -44,7 +44,7 @@ mod tests {
     use super::send_message;
     use crate::test_util::get_test_message;
 
-    /// Tests dispatching message. Requires configured TELEGRAM configration
+    /// Tests dispatching message. Requires configured TELEGRAM configuration
     #[tokio::test]
     async fn test_send_message() {
         let message = get_test_message();

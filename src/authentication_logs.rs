@@ -14,7 +14,7 @@ use crate::notifiers::{Dispatcher, Notification};
 
 static INTERVAL: u64 = 1000;
 
-/// Watch authentication logs and dispatch a [Notification](notifiers::Notifaction) if a login was registered.
+/// Watch authentication logs and dispatch a [Notification](notifiers::Notification) if a login was registered.
 pub async fn watch_authentication_logs(dispatcher: &Dispatcher, config: &Config) {
     info!("start watching authentication logs");
     let mut file = File::open(config.authentication_logs.clone())
