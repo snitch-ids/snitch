@@ -58,13 +58,13 @@ async fn main() {
         validate_hashes(config)
             .await
             .map_err(|err| {
-                println!("Failed scaning files: {err}");
+                println!("Failed scanning files: {err}");
                 process::exit(1);
             })
             .expect("Checking files failed");
     } else if args.watch_files {
         watch_files(config).await;
-    } else if args.watch_authentication {
+    } else if args.watch_authentications {
         watch_authentication_logs(&config.notifications, &config).await;
     }
 }

@@ -2,11 +2,11 @@ use clap::Parser;
 
 static DEFAULT_CONFIG: &str = "/etc/snitch/config.yaml";
 
-/// Get notified when someone intrudes into your system.
+/// Get notified when someone intrudes into your system or changes files.
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 pub struct Cli {
-    /// initialize the database
+    /// Initialize the database
     #[clap(short, long)]
     pub init: bool,
 
@@ -14,23 +14,23 @@ pub struct Cli {
     #[clap(short, long)]
     pub scan: bool,
 
-    /// Start scanning authentication
+    /// Watch for file changes
     #[clap(long)]
     pub watch_files: bool,
 
-    /// Start scanning authentication
+    /// Watch authentication logs for logins
     #[clap(short, long)]
-    pub watch_authentication: bool,
+    pub watch_authentications: bool,
 
-    /// print a demo configuration (e.g. as a template for /etc/snitch/config.yaml)
+    /// Print a demo configuration (e.g. as a template for /etc/snitch/config.yaml)
     #[clap(long)]
     pub demo_config: bool,
 
-    /// use this config file
+    /// Use this config file
     #[clap(long, default_value = DEFAULT_CONFIG)]
     pub config_file: String,
 
-    /// verbose mode
+    /// Verbose mode
     #[clap(short, long)]
     pub verbose: bool,
 }

@@ -84,7 +84,7 @@ pub async fn init_hash_db(config: Config) -> Result<()> {
     Ok(())
 }
 
-/// Returnes `true` if `entry` is either a symbolic link or a directory
+/// Returns `true` if `entry` is either a symbolic link or a directory
 fn is_symlink_or_directory(entry: &Path) -> bool {
     entry.is_dir() || entry.is_symlink()
 }
