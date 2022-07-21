@@ -42,12 +42,11 @@ impl Config {
 
     /// Filters excluded paths such as the database path of snitch
     pub fn is_excluded_directory(&self, directory: &DirEntry) -> bool {
-        let db_path = self.database_path();
         directory
             .path()
-            .to_str()
-            .map(|s| s.starts_with(db_path.to_str().unwrap()))
-            .unwrap_or(false)
+            .parent()
+            .expect("failed getting parent directory")
+            == self.database_path()
     }
 
     /// get a basic configuration for demonstration. On Ubuntu and Debian this should be a good starting point.
