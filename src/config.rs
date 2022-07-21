@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process;
+use walkdir::DirEntry;
 
 use crate::notifiers::Dispatcher;
 
@@ -10,6 +11,7 @@ pub struct Config {
     pub directories: Vec<String>,
     pub notifications: Dispatcher,
     pub authentication_logs: String,
+    pub snitch_root: String,
 }
 
 fn check_directory_exists(directory: &Path) -> bool {
@@ -21,6 +23,12 @@ fn check_directory_exists(directory: &Path) -> bool {
 }
 
 impl Config {
+    pub fn database_path(&self) -> PathBuf {
+        let database_path = Path::new(&self.snitch_root).join(Path::new("db"));
+        assert!(database_path.is_absolute());
+        database_path
+    }
+
     /// get directories as a vector of Paths. Non-existent directories will be ignored with a warning.
     pub fn directories(&self) -> Vec<&Path> {
         let paths = self
@@ -30,6 +38,16 @@ impl Config {
             .filter(|dir| check_directory_exists(dir))
             .collect();
         paths
+    }
+
+    /// Filters excluded paths such as the database path of snitch
+    pub fn is_excluded_directory(&self, directory: &DirEntry) -> bool {
+        let db_path = self.database_path();
+        directory
+            .path()
+            .to_str()
+            .map(|s| s.starts_with(db_path.to_str().unwrap()))
+            .unwrap_or(false)
     }
 
     /// get a basic configuration for demonstration. On Ubuntu and Debian this should be a good starting point.
@@ -50,6 +68,7 @@ impl Config {
                 enable_telegram: true,
                 enable_slack: false,
             },
+            snitch_root: "/etc/snitch".to_owned(),
         }
     }
 }

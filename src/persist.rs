@@ -1,12 +1,10 @@
 use crate::config::Config;
-use std::path::Path;
+use crate::hashing;
+use std::path::{Path, PathBuf};
 use std::str::from_utf8;
 use std::{error, fmt};
 
-use crate::{
-    hashing::{self, NITRO_DATABASE_PATH},
-    notifiers::{BasicNotification, Notification},
-};
+use crate::notifiers::{BasicNotification, Notification};
 use indicatif::ProgressBar;
 use sled::{self, Db};
 
@@ -34,14 +32,14 @@ impl Notification for HashMismatch {
     }
 }
 
-pub fn open_database() -> ResultPersist<Db> {
+pub fn open_database(path: &PathBuf) -> ResultPersist<Db> {
     let db_config = sled::Config::default()
-        .path(NITRO_DATABASE_PATH)
+        .path(path)
         .cache_capacity(10_000_000_000)
         .flush_every_ms(Some(10000000));
 
     let db = db_config.open().map_err(|err| {
-        println!("Cannot open {NITRO_DATABASE_PATH}");
+        println!("Cannot open {:?}", path);
         err
     })?;
 
@@ -70,8 +68,8 @@ pub fn upsert_hashes(db: &sled::Db, fp: &Path, file_hash: &str) -> Result<(), Ha
 }
 
 pub async fn validate_hashes(config: Config) -> ResultPersist<()> {
-    let dispatcher = config.notifications;
-    let db = open_database()?;
+    let dispatcher = &config.notifications;
+    let db = open_database(&config.database_path())?;
     let n_items = db.len() as u64;
     let pb = ProgressBar::new(n_items);
     let mut messages: Vec<HashMismatch> = vec![];
