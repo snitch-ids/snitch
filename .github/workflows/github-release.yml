@@ -1,0 +1,29 @@
+
+
+name: Releases
+
+on: 
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup nightly
+      run: rustup default nightly
+    - name: Build
+      # run: cargo build --verbose
+      run: echo "test" > foo.txt
+    - name: Build1
+      # run: cargo build --verbose
+      run: echo "test" > body.md
+    - uses: ncipollo/release-action@v1
+      with:
+        artifacts: "foo.txt"
+        bodyFile: "body.md"
+        # token: ${{ secrets.YOUR_GITHUB_TOKEN }}
