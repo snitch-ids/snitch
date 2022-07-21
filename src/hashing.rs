@@ -74,9 +74,14 @@ pub async fn init_hash_db(config: Config) -> Result<()> {
     }
 
     let db = open_database(&database_path)?;
+    let n_directories = config.directories().len() + 1;
 
-    for directory in config.directories() {
-        info!("process directory: {:?}", &directory);
+    for (index, directory) in config.directories().iter().enumerate() {
+        info!(
+            "processing directory {} of {n_directories}: {:?}",
+            index + 1,
+            &directory
+        );
         upsert_hash_tree(&db, &config, directory).await?;
     }
     info!("database checksum: {}", db.checksum()?);
