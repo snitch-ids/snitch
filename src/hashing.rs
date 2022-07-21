@@ -10,14 +10,12 @@ use data_encoding::HEXUPPER;
 use notify::{raw_watcher, RawEvent, RecursiveMode, Watcher};
 use ring::digest::{Context, Digest, SHA256};
 use std::sync::mpsc::channel;
-use walkdir::{DirEntry, WalkDir};
+use walkdir::WalkDir;
 
 use crate::config::Config;
 use crate::hashing;
 use crate::notifiers::Dispatcher;
 use crate::persist::{open_database, upsert_hashes};
-
-pub static NITRO_DATABASE_PATH: &str = "/etc/snitch/db";
 
 type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
 
@@ -68,17 +66,18 @@ impl From<sled::Error> for HashDBError {
 
 /// Initialize the file hash database
 pub async fn init_hash_db(config: Config) -> Result<()> {
-    let database_path = Path::new(NITRO_DATABASE_PATH);
+    let database_path = config.database_path();
+
     if database_path.exists() {
-        info!("database already found at: {:?}. Deleting.", database_path);
-        std::fs::remove_dir_all(database_path).expect("Failed deleting database.");
+        info!("database already found at: {:?}. Deleting.", &database_path);
+        std::fs::remove_dir_all(&database_path).expect("Failed deleting database.");
     }
 
-    let db = open_database()?;
+    let db = open_database(&database_path)?;
 
     for directory in config.directories() {
         info!("process directory: {:?}", &directory);
-        upsert_hash_tree(&db, &config.notifications, directory).await?;
+        upsert_hash_tree(&db, &config, directory).await?;
     }
     info!("database checksum: {}", db.checksum()?);
     Ok(())
@@ -89,25 +88,14 @@ fn is_symlink_or_directory(entry: &Path) -> bool {
     entry.is_dir() || entry.is_symlink()
 }
 
-/// Filters excluded paths such as the database path of snitch
-fn is_excluded(entry: &DirEntry) -> bool {
-    entry
-        .path()
-        .to_str()
-        .map(|s| s.starts_with(NITRO_DATABASE_PATH))
-        .unwrap_or(false)
-}
-
 /// Starts walking a `start_path`, hashes all files and stores the hashes together with the
 /// path in a database `db`.
-async fn upsert_hash_tree(
-    db: &Db,
-    dispatcher: &Dispatcher,
-    start_path: &Path,
-) -> std::io::Result<()> {
+async fn upsert_hash_tree(db: &Db, config: &Config, start_path: &Path) -> std::io::Result<()> {
+    let dispatcher = &config.notifications;
+
     let walker = WalkDir::new(start_path)
         .into_iter()
-        .filter_entry(|e| !is_excluded(e));
+        .filter_entry(|e| !config.is_excluded_directory(e));
 
     for entry in walker {
         let entry_checked = match entry {
@@ -158,7 +146,7 @@ pub async fn watch_files(config: Config) {
         watcher.watch(directory, RecursiveMode::Recursive).unwrap();
     }
 
-    let db = open_database().unwrap();
+    let db = open_database(&config.database_path()).unwrap();
 
     loop {
         match rx.recv() {
