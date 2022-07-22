@@ -16,6 +16,7 @@ use crate::config::Config;
 use crate::hashing;
 use crate::notifiers::Dispatcher;
 use crate::persist::{open_database, upsert_hashes};
+use crate::style::get_progressbar;
 
 type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
 
@@ -74,17 +75,14 @@ pub async fn init_hash_db(config: Config) -> Result<()> {
     }
 
     let db = open_database(&database_path)?;
-    let n_directories = config.directories().len() + 1;
-
-    for (index, directory) in config.directories().iter().enumerate() {
-        info!(
-            "processing directory {} of {n_directories}: {:?}",
-            index + 1,
-            &directory
-        );
+    let progressbar = get_progressbar(config.directories().len() as u64, 1);
+    for directory in config.directories() {
+        progressbar.inc(1);
+        progressbar.set_message(format!("{}", directory.display()));
         upsert_hash_tree(&db, &config, directory).await?;
     }
-    info!("database checksum: {}", db.checksum()?);
+    progressbar.finish_with_message(format!("database checksum: {}", db.checksum()?));
+
     Ok(())
 }
 

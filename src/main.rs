@@ -23,6 +23,7 @@ mod config;
 mod hashing;
 mod notifiers;
 mod persist;
+mod style;
 
 fn setup_logging(args: &Cli) {
     let filter_level = match args.verbose {

@@ -5,7 +5,7 @@ use std::str::from_utf8;
 use std::{error, fmt};
 
 use crate::notifiers::{BasicNotification, Notification};
-use indicatif::ProgressBar;
+use crate::style::get_progressbar;
 use sled::{self, Db};
 
 type ResultPersist<T> = std::result::Result<T, Box<dyn error::Error>>;
@@ -70,24 +70,21 @@ pub fn upsert_hashes(db: &sled::Db, fp: &Path, file_hash: &str) -> Result<(), Ha
 pub async fn validate_hashes(config: Config) -> ResultPersist<()> {
     let dispatcher = &config.notifications;
     let db = open_database(&config.database_path())?;
-    let n_items = db.len() as u64;
-    let pb = ProgressBar::new(n_items);
+    let progressbar = get_progressbar(db.len() as u64, 10);
     let mut messages: Vec<HashMismatch> = vec![];
 
     for key in db.iter() {
-        pb.inc(1);
+        progressbar.inc(1);
         let vec = key?;
         let vec_str = from_utf8(&vec.0)?;
         let former_hash = from_utf8(&vec.1)?;
 
         let fp = Path::new(&vec_str);
-
         if !fp.exists() {
-            let message: String = format!(
+            let message = format!(
                 "directory <b>{}</b> does not exist but was previously there",
                 fp.display()
-            )
-            .to_string();
+            );
 
             let notification = BasicNotification { message };
             dispatcher.dispatch(&notification);
@@ -99,7 +96,7 @@ pub async fn validate_hashes(config: Config) -> ResultPersist<()> {
             messages.push(e);
         });
     }
-    pb.finish_with_message("done");
+    progressbar.finish_with_message("done");
     for message in messages.pop() {
         warn!("{:?}", message);
     }
