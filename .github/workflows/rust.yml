@@ -36,6 +36,6 @@ jobs:
     - name: Build
       run: cargo build --verbose
     - name: Run app init
-      run: cargo run -- --init --config-file=.github/workflows/testconfig.yaml
+      run: cargo run -- --init --config-file=.github/testconfig.yaml
     - name: Run app scan
-      run: cargo run -- --scan --config-file=.github/workflows/testconfig.yaml
+      run: cargo run -- --scan --config-file=.github/testconfig.yaml
