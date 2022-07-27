@@ -14,12 +14,6 @@ Requirements
 
 First, make sure that you have the [rust compiler](https://www.rust-lang.org/tools/install) installed.
 
-`Snitch` is work in progress that requires `rust nightly` features:
-
-```
-rustup default nightly
-```
-
 On a plain Ubuntu/Debian you also need to:
 
 ```
