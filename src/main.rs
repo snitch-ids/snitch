@@ -72,12 +72,9 @@ async fn main() {
 
 #[cfg(test)]
 pub mod test_util {
-    use chrono::Utc;
+    use crate::notifiers::Message;
 
-    pub fn get_test_message() -> String {
-        let host_str = hostname::get().unwrap();
-        let host = host_str.to_str().unwrap();
-        let now = Utc::now();
-        format!("unit test {:?}\nhost: {}", now, host)
+    pub fn get_test_message() -> Message {
+        Message::new_now("unit-test".to_owned(), "".to_string())
     }
 }

@@ -10,7 +10,7 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::time;
 
 use crate::config::Config;
-use crate::notifiers::{Dispatcher, Notification};
+use crate::notifiers::{Dispatcher, Message, Notification};
 
 static INTERVAL: u64 = 1000;
 
@@ -70,11 +70,12 @@ impl RootElevation {
 }
 
 impl Notification for RootElevation {
-    fn message(&self) -> String {
-        format!(
+    fn message(&self) -> Message {
+        let content = format!(
             "User <b>{}</b> just become root on <code>{}</code>\n{}",
             self.username, self.hostname, self.datetime
-        )
+        );
+        Message::new_now("Root elevation".to_string(), content)
     }
 }
 
@@ -105,11 +106,12 @@ impl Login {
 }
 
 impl Notification for Login {
-    fn message(&self) -> String {
-        format!(
+    fn message(&self) -> Message {
+        let content = format!(
             "New login by <b>{}</b> from IP <code>{}</code> on <b>{}</b>\nmethod: {}\n{}",
             self.username, self.ip, self.hostname, self.method, self.datetime
-        )
+        );
+        Message::new_now("Login".to_string(), content)
     }
 }
 

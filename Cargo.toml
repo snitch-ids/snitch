@@ -8,7 +8,7 @@ readme = "README.md"
 authors = ["Marius Kriegerowski <marius.kriegerowski@gmail.com>"]
 
 [dependencies]
-chrono = "0.4"
+chrono = {version="0.4", features=["serde"]}
 clap = {version="3.1", features=["derive"]}
 data-encoding = "2.3"
 env_logger = "0.9"

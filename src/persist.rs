@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::str::from_utf8;
 use std::{error, fmt};
 
-use crate::notifiers::{BasicNotification, Notification};
+use crate::notifiers::{BasicNotification, Message, Notification};
 use crate::style::get_progressbar;
 use sled::{self, Db};
 
@@ -27,8 +27,9 @@ impl fmt::Debug for HashMismatch {
 }
 
 impl Notification for HashMismatch {
-    fn message(&self) -> String {
-        format!("File was modified: {}", self.file_path)
+    fn message(&self) -> Message {
+        let content = format!(": {}", self.file_path);
+        Message::new_now("File was modified".to_owned(), content)
     }
 }
 
@@ -81,11 +82,11 @@ pub async fn validate_hashes(config: Config) -> ResultPersist<()> {
 
         let fp = Path::new(&vec_str);
         if !fp.exists() {
-            let message = format!(
+            let content = format!(
                 "directory <b>{}</b> does not exist but was previously there",
                 fp.display()
             );
-
+            let message = Message::new_now("Filesystem changed".to_owned(), content);
             let notification = BasicNotification { message };
             dispatcher.dispatch(&notification);
             continue;
