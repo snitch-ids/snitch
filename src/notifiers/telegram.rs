@@ -4,14 +4,16 @@ use std::env;
 use reqwest;
 use reqwest::header::HeaderMap;
 
-pub async fn send_message(message: String) -> Result<(), reqwest::Error> {
+use super::Message;
+
+pub async fn send_message(message: Message) -> Result<(), reqwest::Error> {
     let token = env::var("TELEGRAM_BOT_TOKEN").expect("TELEGRAM_BOT_TOKEN not set\n");
     let chat_id = env::var("TELEGRAM_CHAT_ID").expect("TELEGRAM_CHAT_ID not set\n");
     let url = format!("https://api.telegram.org/bot{}/sendMessage", token);
 
     let mut params = HashMap::new();
 
-    params.insert("text", format!("<i>Snitch</i>\n{}", message));
+    params.insert("text", message.as_single_string());
     params.insert("chat_id", chat_id);
     params.insert("parse_mode", "html".to_owned());
 
