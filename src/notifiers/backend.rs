@@ -10,13 +10,6 @@ use super::Message;
 pub async fn send_message(message: Message) -> Result<(), reqwest::Error> {
     let url = format!("http://127.0.0.1:8080/messages/");
 
-    let mut params = HashMap::new();
-
-    params.insert("hostname", message.hostname);
-    params.insert("timestamp", message.timestamp.to_string());
-    params.insert("title", message.title);
-    params.insert("content", message.content);
-
     let mut headers = HeaderMap::new();
     headers.insert("Accept", "application/json".parse().unwrap());
     headers.insert("Content-Type", "application/json".parse().unwrap());
@@ -27,8 +20,7 @@ pub async fn send_message(message: Message) -> Result<(), reqwest::Error> {
     client
         .post(url)
         .headers(headers)
-        // .json(&message)  // TODO: why doesnt this work???
-        .json(&params)
+        .json(&message)  // TODO: why doesnt this work???
         .send()
         .await?;
     debug!("sent message");
