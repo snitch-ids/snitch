@@ -44,7 +44,7 @@ pub async fn send_message(message: Message) -> Result<(), reqwest::Error> {
 mod tests {
 
     use super::send_message;
-    use crate::test_util::get_test_message;
+    use crate::test_utils::get_test_message;
 
     /// Tests dispatching message. Requires configured TELEGRAM configuration
     #[tokio::test]

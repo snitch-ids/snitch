@@ -7,8 +7,16 @@ license = "MIT"
 readme = "README.md"
 authors = ["Marius Kriegerowski <marius.kriegerowski@gmail.com>"]
 
+[lib]
+name = "snitch"
+path = "src/lib.rs"
+
+[[bin]]
+name = "snitch"
+path = "src/bin.rs"
+
 [dependencies]
-chrono = {version="0.4", features=["serde"]}
+chrono = { version = "0.4", features = ["serde"] }
 clap = {version="3.1", features=["derive"]}
 data-encoding = "2.3"
 env_logger = "0.9"
