@@ -16,14 +16,14 @@ use crate::hashing::{init_hash_db, watch_files};
 use crate::cli::Cli;
 use crate::config::{load_config_from_file, print_basic_config};
 use crate::persist::validate_hashes;
-
 mod authentication_logs;
 mod cli;
 mod config;
 mod hashing;
-mod notifiers;
+pub mod notifiers;
 mod persist;
 mod style;
+mod test_utils;
 
 fn setup_logging(args: &Cli) {
     let filter_level = match args.verbose {
@@ -67,14 +67,5 @@ async fn main() {
         watch_files(config).await;
     } else if args.watch_authentications {
         watch_authentication_logs(&config.notifications, &config).await;
-    }
-}
-
-#[cfg(test)]
-pub mod test_util {
-    use crate::notifiers::Message;
-
-    pub fn get_test_message() -> Message {
-        Message::new_now("unit-test".to_owned(), "".to_string())
     }
 }

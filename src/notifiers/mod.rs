@@ -1,4 +1,3 @@
-use chrono::serde::ts_milliseconds;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 extern crate lazy_static;
@@ -17,7 +16,6 @@ pub struct Message {
     pub hostname: String,
     pub title: String,
     pub content: String,
-    #[serde(with = "ts_milliseconds")]
     pub timestamp: DateTime<Utc>,
 }
 
