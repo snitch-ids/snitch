@@ -14,12 +14,22 @@ use crate::notifiers::{Dispatcher, Message, Notification};
 
 static INTERVAL: u64 = 1000;
 
+#[derive(Debug)]
+pub enum WatchLogsError {
+    NoLogFile,
+}
+
 /// Watch authentication logs and dispatch a [Notification](notifiers::Notification) if a login was registered.
-pub async fn watch_authentication_logs(dispatcher: &Dispatcher, config: &Config) {
+pub async fn watch_authentication_logs(
+    dispatcher: &Dispatcher,
+    config: &Config,
+) -> Result<(), WatchLogsError> {
     info!("start watching authentication logs");
-    let mut file = File::open(config.authentication_logs.clone())
-        .await
-        .unwrap();
+    let filename = match config.authentication_logs.as_deref() {
+        None => return Err(WatchLogsError::NoLogFile),
+        Some(v) => v,
+    };
+    let mut file = File::open(filename).await.unwrap();
     let mut interval = time::interval(Duration::from_millis(INTERVAL));
     let mut contents = vec![];
     let mut position = file.read_to_end(&mut contents).await.unwrap();
