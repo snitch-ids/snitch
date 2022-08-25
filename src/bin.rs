@@ -66,6 +66,8 @@ async fn main() {
     } else if args.watch_files {
         watch_files(config).await;
     } else if args.watch_authentications {
-        watch_authentication_logs(&config.notifications, &config).await;
+        watch_authentication_logs(&config.notifications, &config)
+            .await
+            .expect("failed starting log file watching");
     }
 }

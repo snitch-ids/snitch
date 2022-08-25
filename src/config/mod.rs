@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::process;
+use std::{env, process};
 use walkdir::DirEntry;
-
+mod default;
+mod macos;
+mod windows;
 use crate::notifiers::Dispatcher;
 
 /// Snitch configurations
@@ -10,7 +12,7 @@ use crate::notifiers::Dispatcher;
 pub struct Config {
     pub directories: Vec<String>,
     pub notifications: Dispatcher,
-    pub authentication_logs: String,
+    pub authentication_logs: Option<String>,
     pub snitch_root: String,
 }
 
@@ -51,23 +53,10 @@ impl Config {
 
     /// get a basic configuration for demonstration. On Ubuntu and Debian this should be a good starting point.
     pub fn demo_config() -> Config {
-        Config {
-            directories: vec![
-                "/bin".to_owned(),
-                "/sbin".to_owned(),
-                "/boot".to_owned(),
-                "/root".to_owned(),
-                "/usr".to_owned(),
-                "/lib".to_owned(),
-                "/etc".to_owned(),
-            ],
-            authentication_logs: "/var/log/auth.log".to_owned(),
-            notifications: Dispatcher {
-                enable_email: false,
-                enable_telegram: true,
-                enable_slack: false,
-            },
-            snitch_root: "/etc/snitch".to_owned(),
+        match env::consts::OS {
+            "macos" => macos::get_config(),
+            "windows" => windows::get_config(),
+            _ => default::get_config(),
         }
     }
 }
