@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 extern crate lazy_static;
 
+#[cfg(feature = "experimental")]
 pub mod backend;
 pub mod email;
 pub mod slack;

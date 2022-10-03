@@ -45,8 +45,8 @@ async fn main() -> Result<()> {
         process::exit(0);
     }
 
-    let config =
-        load_config_from_file(Path::new(&args.config_file)).wrap_err("failed loading config")?;
+    let config = load_config_from_file(Path::new(&args.config_file))
+        .wrap_err(format!("failed loading config file: {}", args.config_file))?;
     let start = Instant::now();
     if args.init {
         init_hash_db(config)
