@@ -8,6 +8,7 @@ use std::time::Instant;
 
 use clap::StructOpt;
 use env_logger::Builder;
+use eyre::{Result, WrapErr};
 use log::LevelFilter;
 
 use crate::authentication_logs::watch_authentication_logs;
@@ -35,16 +36,17 @@ fn setup_logging(args: &Cli) {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     let args = Cli::parse();
     setup_logging(&args);
 
     if args.demo_config {
-        print_basic_config();
+        print_basic_config().wrap_err("failed printing basic config")?;
         process::exit(0);
     }
 
-    let config = load_config_from_file(Path::new(&args.config_file)).unwrap();
+    let config =
+        load_config_from_file(Path::new(&args.config_file)).wrap_err("failed loading config")?;
     let start = Instant::now();
     if args.init {
         init_hash_db(config)
@@ -70,4 +72,5 @@ async fn main() {
             .await
             .expect("failed starting log file watching");
     }
+    Ok(())
 }

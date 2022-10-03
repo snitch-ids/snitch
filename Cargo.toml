@@ -35,3 +35,4 @@ sled = "0.34"
 tokio = { version = "1.17", features = ["full"] }
 walkdir = "2.3"
 notify = "4.0.17"
+eyre = "0.6.8"

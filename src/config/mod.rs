@@ -6,6 +6,7 @@ mod default;
 mod macos;
 mod windows;
 use crate::notifiers::Dispatcher;
+use eyre::Result;
 
 /// Snitch configurations
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -73,9 +74,10 @@ pub fn load_config_from_file(path: &Path) -> Result<Config, serde_yaml::Error> {
     Ok(config)
 }
 
-pub fn print_basic_config() {
+pub fn print_basic_config() -> Result<()> {
     let config = Config::demo_config();
-    println!("{}", serde_yaml::to_string(&config).unwrap());
+    println!("{}", serde_yaml::to_string(&config)?);
+    Ok(())
 }
 
 #[cfg(test)]
