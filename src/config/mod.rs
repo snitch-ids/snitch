@@ -5,14 +5,13 @@ use walkdir::DirEntry;
 mod default;
 mod macos;
 mod windows;
-use crate::notifiers::Dispatcher;
 use eyre::Result;
 
 /// Snitch configurations
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     pub directories: Vec<String>,
-    pub notifications: Dispatcher,
+    pub sender: multi_dispatcher::dispatcher::Sender,
     pub authentication_logs: Option<String>,
     pub snitch_root: String,
 }

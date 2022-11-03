@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::str::from_utf8;
 use std::{error, fmt};
 
+use crate::notifiers::Dispatcher;
 use crate::notifiers::{BasicNotification, Message, Notification};
 use crate::style::get_progressbar;
 use sled::{self, Db};
@@ -68,8 +69,7 @@ pub fn upsert_hashes(db: &sled::Db, fp: &Path, file_hash: &str) -> Result<(), Ha
     Ok(())
 }
 
-pub async fn validate_hashes(config: Config) -> ResultPersist<()> {
-    let dispatcher = &config.notifications;
+pub async fn validate_hashes(config: &Config, dispatcher: &Dispatcher) -> ResultPersist<()> {
     let db = open_database(&config.database_path())?;
     let progressbar = get_progressbar(db.len() as u64, 10);
     let mut messages: Vec<HashMismatch> = vec![];

@@ -4,7 +4,8 @@ extern crate log;
 
 use std::path::Path;
 use std::process;
-use std::time::Instant;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 
 use clap::StructOpt;
 use env_logger::Builder;
@@ -16,6 +17,7 @@ use crate::hashing::{init_hash_db, watch_files};
 
 use crate::cli::Cli;
 use crate::config::{load_config_from_file, print_basic_config};
+use crate::notifiers::Dispatcher;
 use crate::persist::validate_hashes;
 mod authentication_logs;
 mod cli;
@@ -47,9 +49,12 @@ async fn main() -> Result<()> {
 
     let config = load_config_from_file(Path::new(&args.config_file))
         .wrap_err(format!("failed loading config file: {}", args.config_file))?;
+    let sender = config.sender.clone();
+    let dispatcher = Dispatcher::new(sender.into());
     let start = Instant::now();
+    info!("start!");
     if args.init {
-        init_hash_db(config)
+        init_hash_db(&config, &dispatcher)
             .await
             .map_err(|err| {
                 error!("{err}");
@@ -58,7 +63,7 @@ async fn main() -> Result<()> {
             .unwrap();
         debug!("Time elapsed: {:?}", start.elapsed());
     } else if args.scan {
-        validate_hashes(config)
+        validate_hashes(&config, &dispatcher)
             .await
             .map_err(|err| {
                 println!("Failed scanning files: {err}");
@@ -66,11 +71,15 @@ async fn main() -> Result<()> {
             })
             .expect("Checking files failed");
     } else if args.watch_files {
-        watch_files(config).await;
+        watch_files(&config, &dispatcher).await;
     } else if args.watch_authentications {
-        watch_authentication_logs(&config.notifications, &config)
+        watch_authentication_logs(&dispatcher, &config)
             .await
             .expect("failed starting log file watching");
+    }
+    loop {
+        sleep(Duration::from_millis(500));
+        break;
     }
     Ok(())
 }
