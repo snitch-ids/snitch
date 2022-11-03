@@ -66,7 +66,7 @@ impl From<sled::Error> for HashDBError {
 }
 
 /// Initialize the file hash database
-pub async fn init_hash_db(config: Config) -> Result<()> {
+pub async fn init_hash_db(config: &Config, dispatcher: &Dispatcher) -> Result<()> {
     let database_path = config.database_path();
 
     if database_path.exists() {
@@ -79,7 +79,7 @@ pub async fn init_hash_db(config: Config) -> Result<()> {
     for directory in config.directories() {
         progressbar.inc(1);
         progressbar.set_message(format!("{}", directory.display()));
-        upsert_hash_tree(&db, &config, directory).await?;
+        upsert_hash_tree(&db, &config, &dispatcher, directory).await?;
     }
     progressbar.finish_with_message(format!("database checksum: {}", db.checksum()?));
 
@@ -93,9 +93,12 @@ fn is_symlink_or_directory(entry: &Path) -> bool {
 
 /// Starts walking a `start_path`, hashes all files and stores the hashes together with the
 /// path in a database `db`.
-async fn upsert_hash_tree(db: &Db, config: &Config, start_path: &Path) -> std::io::Result<()> {
-    let dispatcher = &config.notifications;
-
+async fn upsert_hash_tree(
+    db: &Db,
+    config: &Config,
+    dispatcher: &Dispatcher,
+    start_path: &Path,
+) -> std::io::Result<()> {
     let walker = WalkDir::new(start_path)
         .into_iter()
         .filter_entry(|e| !config.is_excluded_directory(e));
@@ -134,7 +137,7 @@ async fn check_file_hash(file_path_entry: &Path, db: &Db, dispatcher: &Dispatche
     });
 }
 
-pub async fn watch_files(config: Config) {
+pub async fn watch_files(config: &Config, dispatcher: &Dispatcher) {
     // Create a channel to receive the events.
     let (tx, rx) = channel();
 
@@ -155,10 +158,10 @@ pub async fn watch_files(config: Config) {
         match rx.recv() {
             Ok(RawEvent {
                 path: Some(path),
-                op: Ok(op),
-                cookie,
+                op: Ok(_op),
+                ..
             }) => {
-                check_file_hash(&path, &db, &config.notifications).await;
+                check_file_hash(&path, &db, &dispatcher).await;
             }
             Ok(event) => println!("broken event: {:?}", event),
             Err(e) => println!("watch error: {:?}", e),

@@ -1,4 +1,4 @@
-use crate::notifiers::Dispatcher;
+use multi_dispatcher::dispatcher::Sender;
 
 use super::Config;
 
@@ -11,11 +11,7 @@ pub fn get_config() -> Config {
             "/opt".to_owned(),
         ],
         authentication_logs: None,
-        notifications: Dispatcher {
-            enable_email: false,
-            enable_telegram: true,
-            enable_slack: false,
-        },
+        sender: Sender::demo_sender(),
         snitch_root: "/etc/snitch".to_owned(),
     }
 }

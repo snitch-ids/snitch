@@ -1,12 +1,10 @@
 use chrono::{DateTime, Utc};
+use multi_dispatcher;
+use multi_dispatcher::dispatcher::Sender;
 use serde::{Deserialize, Serialize};
-extern crate lazy_static;
+use tokio::sync::broadcast;
 
-#[cfg(feature = "experimental")]
-pub mod backend;
-pub mod email;
-pub mod slack;
-pub mod telegram;
+extern crate lazy_static;
 
 fn get_hostname_string() -> String {
     hostname::get().unwrap().to_str().unwrap().to_owned()
@@ -40,49 +38,22 @@ impl Message {
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct Dispatcher {
-    pub enable_email: bool,
-    pub enable_telegram: bool,
-    pub enable_slack: bool,
+    tx: broadcast::Sender<String>,
 }
 
 impl Dispatcher {
+    pub(crate) fn new(sender: Sender) -> Self {
+        let tx = sender.setup_dispatcher(10);
+        debug!("created sender channel");
+        Self { tx }
+    }
+
     pub fn dispatch<T: Notification>(&self, notification: &T) {
         let message = notification.message();
-        debug!("dispatching notification {:?}", message);
-
-        if self.enable_telegram {
-            Dispatcher::send_telegram(message.clone());
+        if let Some(error) = self.tx.send(message.as_single_string()).err() {
+            warn!("Failed sending message {}", error);
         }
-        if self.enable_email {
-            Dispatcher::send_mail(message.clone());
-        }
-        if self.enable_slack {
-            Dispatcher::send_slack(message);
-        }
-    }
-
-    fn send_telegram(message: Message) {
-        tokio::spawn(async move {
-            telegram::send_message(message)
-                .await
-                .expect("Failed sending notification via telegram");
-        });
-    }
-
-    fn send_mail(message: Message) {
-        tokio::spawn(async move {
-            email::send_message(message).await;
-        });
-    }
-
-    fn send_slack(message: Message) {
-        tokio::spawn(async move {
-            slack::send_message(message)
-                .await
-                .expect("failed sending message to backend {message}");
-        });
     }
 }
 

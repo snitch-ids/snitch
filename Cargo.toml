@@ -1,3 +1,8 @@
+[workspace]
+members = [
+    "multi_dispatcher"
+]
+
 [package]
 name = "snitch"
 description = "Intrusion detection and file integrity verification"
@@ -16,6 +21,7 @@ name = "snitch"
 path = "src/bin.rs"
 
 [dependencies]
+multi_dispatcher = {path="./multi_dispatcher"}
 chrono = { version = "0.4", features = ["serde"] }
 clap = {version="3.1", features=["derive"]}
 data-encoding = "2.3"
@@ -23,14 +29,12 @@ env_logger = "0.9"
 hostname = "0"
 indicatif = "0.16"
 lazy_static = "1"
-lettre = "0.10.0-beta.2"
 log = "0.4"
 regex = "1.5"
 reqwest = { version = "0.11", features = ["blocking", "json"] }
 ring = "0.17.0-alpha.11"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
-slack-hook = "0.8"
 sled = "0.34"
 tokio = { version = "1.17", features = ["full"] }
 walkdir = "2.3"
