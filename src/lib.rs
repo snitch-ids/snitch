@@ -1,4 +1,3 @@
-#![feature(generators)]
 #[macro_use]
 extern crate log;
 

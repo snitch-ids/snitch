@@ -13,7 +13,6 @@ use std::sync::mpsc::channel;
 use walkdir::WalkDir;
 
 use crate::config::Config;
-use crate::hashing;
 use crate::notifiers::Dispatcher;
 use crate::persist::{open_database, upsert_hashes};
 use crate::style::get_progressbar;
@@ -126,12 +125,10 @@ async fn check_file_hash(file_path_entry: &Path, db: &Db, dispatcher: &Dispatche
         debug!("is symlink. skipping.");
         return;
     }
-    let hash = hashing::hash_file(file_path_entry)
-        .await
-        .unwrap_or_else(|err| {
-            warn!("{err} on {:?}. Skipping.", file_path_entry);
-            format!("{:?}", err)
-        });
+    let hash = hash_file(file_path_entry).await.unwrap_or_else(|err| {
+        warn!("{err} on {:?}. Skipping.", file_path_entry);
+        format!("{:?}", err)
+    });
     upsert_hashes(db, file_path_entry, &hash).unwrap_or_else(|e| {
         dispatcher.dispatch(&e);
     });

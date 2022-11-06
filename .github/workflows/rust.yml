@@ -17,8 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - name: Setup nightly
-      run: rustup default nightly
     - name: Build
       run: cargo build --verbose
     - name: Run tests
@@ -28,12 +26,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - name: Setup nightly
-      run: rustup default nightly
     - name: Build
       run: cargo build --verbose
-    - name: Export config
-      run: echo $TEST_CONFIG > .github/testconfig.yaml
+    - name: export config
+      run: echo "$TEST_CONFIG" > .github/config.txt && cat .github/config.txt | base64 -d > .github/testconfig.yaml
     - name: Run app init
       run: cargo run -- --init --config-file=.github/testconfig.yaml
     - name: Run app scan
