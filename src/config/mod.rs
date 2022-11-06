@@ -67,7 +67,7 @@ pub fn load_config_from_file(path: &Path) -> Result<Config, serde_yaml::Error> {
         println!("No config file: {:?}\nTip: run\n\n  snitch --demo-config > /etc/snitch/config.yaml\n\nto get started.", path);
         process::exit(1);
     }
-    let reader = std::fs::File::open(path).unwrap();
+    let reader = std::fs::File::open(path).expect("could not open file");
     let config = serde_yaml::from_reader(reader)?;
 
     Ok(config)

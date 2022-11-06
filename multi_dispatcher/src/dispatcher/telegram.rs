@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::broadcast::Receiver;
 
-use log::{debug, error};
 use crate::dispatcher::Handler;
+use log::{debug, error};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Telegram {
@@ -13,7 +13,6 @@ pub struct Telegram {
 }
 
 impl Handler for Telegram {
-
     fn start_handler(self, receiver: Receiver<String>) {
         let mut handler = TelegramHandler {
             config: self,
@@ -76,11 +75,5 @@ impl TelegramHandler {
                 Ok(data) => self.send(data).await.expect("failed sending message"),
             }
         }
-    }
-}
-
-impl Drop for TelegramHandler {
-    fn drop(&mut self) {
-        println!("dd {}", self.receiver.len());
     }
 }

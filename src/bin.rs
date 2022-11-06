@@ -1,11 +1,10 @@
-#![feature(generators)]
 #[macro_use]
 extern crate log;
 
 use std::path::Path;
-use std::process;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
+use std::process;
 
 use clap::StructOpt;
 use env_logger::Builder;
@@ -47,7 +46,9 @@ async fn main() -> Result<()> {
         process::exit(0);
     }
 
-    let config = load_config_from_file(Path::new(&args.config_file))
+    let config_file = Path::new(&args.config_file);
+
+    let config = load_config_from_file(config_file)
         .wrap_err(format!("failed loading config file: {}", args.config_file))?;
     let sender = config.sender.clone();
     let dispatcher = Dispatcher::new(sender.into());
