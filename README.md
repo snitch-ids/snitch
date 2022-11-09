@@ -60,23 +60,34 @@ Snitch can be configured in `/etc/snitch/config.yaml`. If that file does not exi
 ```
 snitch --demo-config > /etc/snitch/config.yaml
 ```
-to create a template that should be fine on `Ubuntu` and `Debian`.
+to create a template that should be fine on **Linux**, **OSX** and **Windows**.
 
-All files found under `directories` in that file will be integrity checked or watched.
+This is on example configuration:
 
-## Notification Channels
+```
+---
+directories:
+  - /System
+  - /Users
+  - /sbin
+  - /opt
+sender:
+  telegram:
+    bot_token: 3892394878927:DLKjsjs-EXAMPLE-exampleJDij4s
+    chat_id: 1234567890
+  email:
+    smtp_user: secure
+    smtp_password: secure
+    smtp_server: example-server.org
+    receiver_address: my-receiving-address@gmail.com
+  slack:
+    webhook_url: sendmymessagestoslack.com
+    channel: #mysecuritymessages
+authentication_logs: ~
+snitch_root: /etc/snitch
+```
 
-### Telegram
-
-   Requires environment variables: `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
-
-### Slack
-
-   Requires environment variables: `SLACK_WEBHOOK_URL` and `SLACK_CHANNEL`.
-
-### Email
-
-   Requires environment variables: `SMTP_SERVER`, `SMTP_USER` and `SMTP_PASSWORD`. Note, that storing email credentials on your system in clear text is a rather high risk once someone gained access. Thus, this should rather be used for development for now.
+Each `sender` is optional. More to follow... 
 
 Performance
 -----------
