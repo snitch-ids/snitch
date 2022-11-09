@@ -1,4 +1,4 @@
-use multi_dispatcher::dispatcher::Sender;
+use multi_dispatcher::dispatcher::{Example, Sender};
 
 use super::Config;
 
@@ -11,7 +11,7 @@ pub fn get_config() -> Config {
             "/opt".to_owned(),
         ],
         authentication_logs: None,
-        sender: Sender::demo_sender(),
+        sender: Sender::example(),
         snitch_root: "/etc/snitch".to_owned(),
     }
 }

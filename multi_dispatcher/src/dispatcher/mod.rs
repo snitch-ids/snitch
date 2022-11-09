@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Receiver;
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Default, Clone)]
 pub struct Sender {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) telegram: Option<Telegram>,
@@ -22,30 +22,17 @@ pub struct Sender {
     pub(crate) slack: Option<Slack>,
 }
 
-impl Sender {
-    pub fn demo_sender() -> Self {
-        let slack = Slack {
-            webhook_url: "webhook".to_string(),
-            channel: "channel".to_string(),
-        };
-        let email = Email {
-            smtp_user: "".to_string(),
-            smtp_password: "".to_string(),
-            smtp_server: "".to_string(),
-            receiver_address: "test.test@gmail.com".to_string(),
-        };
-        let telegram = Telegram {
-            bot_token: "token".to_string(),
-            chat_id: "chat_id".to_string(),
-        };
-
+impl Example for Sender {
+    fn example() -> Self {
         Self {
-            telegram: Some(telegram),
-            email: Some(email),
-            slack: Some(slack),
+            telegram: Some(Telegram::example()),
+            email: Some(Email::example()),
+            slack: Some(Slack::example()),
         }
     }
+}
 
+impl Sender {
     pub fn setup_dispatcher(self, channel_capacity: usize) -> broadcast::Sender<String> {
         let (tx, rx_telegram) = broadcast::channel::<String>(channel_capacity);
 
@@ -69,4 +56,13 @@ impl Sender {
 
 trait Handler {
     fn start_handler(self, receiver: Receiver<String>);
+}
+
+pub trait Example {
+    fn example() -> Self;
+}
+
+#[test]
+fn test_default_config() {
+    println!("{:?}", Sender::demo_sender());
 }

@@ -1,4 +1,4 @@
-use crate::dispatcher::Handler;
+use crate::dispatcher::{Example, Handler};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::Message as LettreMessage;
 use lettre::{SmtpTransport, Transport};
@@ -12,6 +12,17 @@ pub struct Email {
     pub smtp_password: String,
     pub smtp_server: String,
     pub receiver_address: String,
+}
+
+impl Example for Email {
+    fn example() -> Self {
+        Self {
+            smtp_user: "".to_string(),
+            smtp_password: "".to_string(),
+            smtp_server: "".to_string(),
+            receiver_address: "".to_string(),
+        }
+    }
 }
 
 impl Handler for Email {
@@ -62,4 +73,9 @@ impl EmailHandler {
             self.send(data).await;
         }
     }
+}
+
+#[test]
+fn test_example() {
+    Email::example();
 }

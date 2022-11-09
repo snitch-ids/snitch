@@ -1,12 +1,24 @@
-use crate::dispatcher::Handler;
+use crate::dispatcher::{Example, Handler};
 use serde::{Deserialize, Serialize};
 use slack_hook::{PayloadBuilder, Slack as SlackHook};
 use tokio::sync::broadcast::Receiver;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Slack {
+    #[serde(default)]
     pub webhook_url: String,
+
+    #[serde(default)]
     pub channel: String,
+}
+
+impl Example for Slack {
+    fn example() -> Self {
+        Self {
+            webhook_url: "examples-webhook.com".to_string(),
+            channel: "#blabla".to_string(),
+        }
+    }
 }
 
 impl Handler for Slack {

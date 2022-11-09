@@ -1,4 +1,4 @@
-use multi_dispatcher::dispatcher::Sender;
+use multi_dispatcher::dispatcher::{Example, Sender};
 
 use super::Config;
 
@@ -13,7 +13,7 @@ pub fn get_config() -> Config {
             "/lib".to_owned(),
             "/etc".to_owned(),
         ],
-        sender: Sender::demo_sender(),
+        sender: Sender::example(),
         authentication_logs: Some("/var/log/auth.log".to_owned()),
         snitch_root: "/etc/snitch".to_owned(),
     }

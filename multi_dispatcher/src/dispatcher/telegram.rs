@@ -3,13 +3,22 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::broadcast::Receiver;
 
-use crate::dispatcher::Handler;
-use log::{debug, error};
+use crate::dispatcher::{Example, Handler};
+use log::debug;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Telegram {
     pub bot_token: String,
     pub chat_id: String,
+}
+
+impl Example for Telegram {
+    fn example() -> Self {
+        Telegram {
+            bot_token: "92349823049:DFIPJEXAMPLE-EXAMPLE123d-EXAMPLE".to_string(),
+            chat_id: "1234567890".to_string(),
+        }
+    }
 }
 
 impl Handler for Telegram {
@@ -69,11 +78,16 @@ impl TelegramHandler {
             let data = self.receiver.recv().await;
             match data {
                 Err(e) => {
-                    error!("{}", e);
+                    debug!("{}", e);
                     break;
                 }
                 Ok(data) => self.send(data).await.expect("failed sending message"),
             }
         }
     }
+}
+
+#[test]
+fn test_example() {
+    Telegram::example();
 }

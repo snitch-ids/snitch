@@ -2,9 +2,9 @@
 extern crate log;
 
 use std::path::Path;
+use std::process;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use std::process;
 
 use clap::StructOpt;
 use env_logger::Builder;
