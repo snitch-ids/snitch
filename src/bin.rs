@@ -51,9 +51,9 @@ async fn main() -> Result<()> {
     let config = load_config_from_file(config_file)
         .wrap_err(format!("failed loading config file: {}", args.config_file))?;
     let sender = config.sender.clone();
-    let dispatcher = Dispatcher::new(sender.into());
+    let dispatcher = Dispatcher::new(sender);
     let start = Instant::now();
-    info!("start!");
+    debug!("start!");
     if args.init {
         init_hash_db(&config, &dispatcher)
             .await
@@ -62,12 +62,11 @@ async fn main() -> Result<()> {
                 process::exit(1);
             })
             .unwrap();
-        debug!("Time elapsed: {:?}", start.elapsed());
     } else if args.scan {
         validate_hashes(&config, &dispatcher)
             .await
             .map_err(|err| {
-                println!("Failed scanning files: {err}");
+                warn!("Failed scanning files: {err}");
                 process::exit(1);
             })
             .expect("Checking files failed");
@@ -78,9 +77,7 @@ async fn main() -> Result<()> {
             .await
             .expect("failed starting log file watching");
     }
-    loop {
-        sleep(Duration::from_millis(500));
-        break;
-    }
+    debug!("Time elapsed: {:?}", start.elapsed());
+    sleep(Duration::from_millis(500));
     Ok(())
 }

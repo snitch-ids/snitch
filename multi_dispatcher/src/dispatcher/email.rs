@@ -2,7 +2,7 @@ use crate::dispatcher::{Example, Handler};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::Message as LettreMessage;
 use lettre::{SmtpTransport, Transport};
-use log::{debug, error};
+use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast::Receiver;
 
@@ -34,6 +34,7 @@ impl Handler for Email {
         tokio::spawn(async move {
             email_handler.start().await;
         });
+        debug!("started email handlers");
     }
 }
 
