@@ -28,13 +28,10 @@ directories:
   - /sbin
   - /boot
   - /root
-  - /usr
-  - /lib
-  - /etc
-notifications:
-  enable_email: false
-  enable_telegram: true
-  enable_slack: true
+sender:
+  telegram:
+    bot_token: MY_BOT_TOKEN
+    chat_id: MY_CHAT_ID
 authentication_logs: /var/log/auth.log
 ",
     )
