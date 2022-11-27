@@ -10,12 +10,15 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Receiver;
 
+use log::debug;
+
 /// Bind a handler to a receiver channel if the handler is not `None`.
 macro_rules! setup_handler {
     ($handler:expr, $receiver:expr) => {{
         if let Some(config) = $handler {
             let rx = $receiver.subscribe();
             config.start_handler(rx);
+            debug!("started handler");
         }
     }};
 }

@@ -1,4 +1,5 @@
 use crate::dispatcher::{Example, Handler};
+use log::debug;
 use serde::{Deserialize, Serialize};
 use slack_hook::{PayloadBuilder, Slack as SlackHook};
 use tokio::sync::broadcast::Receiver;

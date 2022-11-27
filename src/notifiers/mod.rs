@@ -52,7 +52,7 @@ impl Dispatcher {
     pub fn dispatch<T: Notification>(&self, notification: &T) {
         let message = notification.message();
         if let Some(error) = self.tx.send(message.as_single_string()).err() {
-            warn!("Failed sending message {}", error);
+            warn!("Failed sending message. Reason: {}", error);
         }
     }
 }

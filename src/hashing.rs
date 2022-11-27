@@ -78,7 +78,7 @@ pub async fn init_hash_db(config: &Config, dispatcher: &Dispatcher) -> Result<()
     for directory in config.directories() {
         progressbar.inc(1);
         progressbar.set_message(format!("{}", directory.display()));
-        upsert_hash_tree(&db, &config, &dispatcher, directory).await?;
+        upsert_hash_tree(&db, config, dispatcher, directory).await?;
     }
     progressbar.finish_with_message(format!("database checksum: {}", db.checksum()?));
 
@@ -158,7 +158,7 @@ pub async fn watch_files(config: &Config, dispatcher: &Dispatcher) {
                 op: Ok(_op),
                 ..
             }) => {
-                check_file_hash(&path, &db, &dispatcher).await;
+                check_file_hash(&path, &db, dispatcher).await;
             }
             Ok(event) => println!("broken event: {:?}", event),
             Err(e) => println!("watch error: {:?}", e),
