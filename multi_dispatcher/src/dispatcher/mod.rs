@@ -10,6 +10,16 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Receiver;
 
+/// Bind a handler to a receiver channel if the handler is not `None`.
+macro_rules! setup_handler {
+    ($handler:expr, $receiver:expr) => {{
+        if let Some(config) = $handler {
+            let rx = $receiver.subscribe();
+            config.start_handler(rx);
+        }
+    }};
+}
+
 #[derive(Debug, PartialEq, Serialize, Deserialize, Default, Clone)]
 pub struct Sender {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -34,22 +44,11 @@ impl Example for Sender {
 
 impl Sender {
     pub fn setup_dispatcher(self, channel_capacity: usize) -> broadcast::Sender<String> {
-        let (tx, rx_telegram) = broadcast::channel::<String>(channel_capacity);
+        let (tx, _) = broadcast::channel::<String>(channel_capacity);
 
-        if let Some(config) = self.telegram {
-            config.start_handler(rx_telegram);
-        }
-
-        if let Some(config) = self.email {
-            let rx_email = tx.subscribe();
-            config.start_handler(rx_email);
-        }
-
-        if let Some(config) = self.slack {
-            let rx_slack = tx.subscribe();
-            config.start_handler(rx_slack);
-        }
-
+        setup_handler!(self.telegram, tx);
+        setup_handler!(self.email, tx);
+        setup_handler!(self.slack, tx);
         tx
     }
 }
@@ -64,5 +63,5 @@ pub trait Example {
 
 #[test]
 fn test_default_config() {
-    println!("{:?}", Sender::demo_sender());
+    println!("{:?}", Sender::example());
 }
