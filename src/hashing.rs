@@ -120,7 +120,6 @@ async fn upsert_hash_tree(
 }
 
 async fn check_file_hash(file_path_entry: &Path, db: &Db, dispatcher: &Dispatcher) {
-    debug!("checking file hash {:?}", file_path_entry);
     if is_symlink_or_directory(file_path_entry) {
         debug!("is symlink. skipping.");
         return;
