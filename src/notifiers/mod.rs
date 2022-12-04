@@ -44,7 +44,9 @@ pub struct Dispatcher {
 
 impl Dispatcher {
     pub(crate) fn new(sender: Sender) -> Self {
-        let tx = sender.setup_dispatcher(10);
+        let (tx, _) = broadcast::channel::<String>(100);
+
+        sender.setup_dispatcher(&tx);
         debug!("created sender channel");
         Self { tx }
     }

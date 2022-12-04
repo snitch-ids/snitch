@@ -46,13 +46,10 @@ impl Example for Sender {
 }
 
 impl Sender {
-    pub fn setup_dispatcher(self, channel_capacity: usize) -> broadcast::Sender<String> {
-        let (tx, _) = broadcast::channel::<String>(channel_capacity);
-
+    pub fn setup_dispatcher(self, tx: &broadcast::Sender<String>) {
         setup_handler!(self.telegram, tx);
         setup_handler!(self.email, tx);
         setup_handler!(self.slack, tx);
-        tx
     }
 }
 
