@@ -2,7 +2,7 @@ use crate::dispatcher::{Example, Handler};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::Message as LettreMessage;
 use lettre::{SmtpTransport, Transport};
-use log::{debug, error, info};
+use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast::Receiver;
 
@@ -17,8 +17,8 @@ pub struct Email {
 impl Example for Email {
     fn example() -> Self {
         Self {
-            smtp_user: "".to_string(),
-            smtp_password: "".to_string(),
+            smtp_user: "USERNAME".to_string(),
+            smtp_password: "SUPERSECUREPASSWORD".to_string(),
             smtp_server: "".to_string(),
             receiver_address: "".to_string(),
         }
