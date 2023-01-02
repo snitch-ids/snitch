@@ -1,3 +1,4 @@
+pub mod backend;
 pub mod email;
 pub mod slack;
 pub mod telegram;
