@@ -3,6 +3,7 @@ pub mod email;
 pub mod slack;
 pub mod telegram;
 
+use backend::Backend;
 use email::Email;
 use slack::Slack;
 use telegram::Telegram;
@@ -12,6 +13,11 @@ use tokio::sync::broadcast;
 use tokio::sync::broadcast::Receiver;
 
 use log::debug;
+
+#[derive(Debug)]
+enum DispatchError {
+    Check(String),
+}
 
 /// Bind a handler to a receiver channel if the handler is not `None`.
 macro_rules! setup_handler {
@@ -34,6 +40,9 @@ pub struct Sender {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) slack: Option<Slack>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) backend: Option<Backend>,
 }
 
 impl Example for Sender {
@@ -42,6 +51,7 @@ impl Example for Sender {
             telegram: Some(Telegram::example()),
             email: Some(Email::example()),
             slack: Some(Slack::example()),
+            backend: Some(Backend::example()),
         }
     }
 }
@@ -49,12 +59,14 @@ impl Example for Sender {
 impl Sender {
     pub fn setup_dispatcher(self, tx: &broadcast::Sender<String>) {
         setup_handler!(self.telegram, tx);
+        setup_handler!(self.backend, tx);
         setup_handler!(self.email, tx);
         setup_handler!(self.slack, tx);
     }
 }
 
 trait Handler {
+    fn check(&self) -> Result<(), DispatchError>;
     fn start_handler(self, receiver: Receiver<String>);
 }
 

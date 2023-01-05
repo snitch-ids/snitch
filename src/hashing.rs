@@ -7,13 +7,13 @@ use std::path::Path;
 extern crate notify;
 
 use data_encoding::HEXUPPER;
+use multi_dispatcher::message::Dispatcher;
 use notify::{raw_watcher, RawEvent, RecursiveMode, Watcher};
 use ring::digest::{Context, Digest, SHA256};
 use std::sync::mpsc::channel;
 use walkdir::WalkDir;
 
 use crate::config::Config;
-use crate::notifiers::Dispatcher;
 use crate::persist::{open_database, upsert_hashes};
 use crate::style::get_progressbar;
 

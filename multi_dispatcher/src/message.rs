@@ -1,10 +1,8 @@
+use crate::dispatcher::Sender;
 use chrono::{DateTime, Utc};
-use multi_dispatcher;
-use multi_dispatcher::dispatcher::Sender;
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
-
-extern crate lazy_static;
 
 fn get_hostname_string() -> String {
     hostname::get().unwrap().to_str().unwrap().to_owned()
@@ -19,7 +17,7 @@ pub struct Message {
 }
 
 impl Message {
-    pub(crate) fn new_now(title: String, content: String) -> Self {
+    pub fn new_now(title: String, content: String) -> Self {
         let timestamp = Utc::now();
         let hostname = get_hostname_string();
         Message {
@@ -43,7 +41,7 @@ pub struct Dispatcher {
 }
 
 impl Dispatcher {
-    pub(crate) fn new(sender: Sender) -> Self {
+    pub fn new(sender: Sender) -> Self {
         let (tx, _) = broadcast::channel::<String>(100);
 
         sender.setup_dispatcher(&tx);

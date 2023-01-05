@@ -1,4 +1,4 @@
-use crate::dispatcher::{Example, Handler};
+use crate::dispatcher::{DispatchError, Example, Handler};
 use serde::{Deserialize, Serialize};
 use slack_hook::{PayloadBuilder, Slack as SlackHook};
 use tokio::sync::broadcast::Receiver;
@@ -22,6 +22,10 @@ impl Example for Slack {
 }
 
 impl Handler for Slack {
+    fn check(&self) -> Result<(), DispatchError> {
+        todo!()
+    }
+
     fn start_handler(self, receiver: Receiver<String>) {
         let mut handler = SlackHandler {
             config: self,
