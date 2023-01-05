@@ -10,7 +10,7 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::time;
 
 use crate::config::Config;
-use crate::notifiers::{Dispatcher, Message, Notification};
+use multi_dispatcher::message::{Dispatcher, Message, Notification};
 
 static INTERVAL: u64 = 1000;
 

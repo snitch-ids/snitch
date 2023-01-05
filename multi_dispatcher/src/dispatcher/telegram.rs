@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::broadcast::Receiver;
 
-use crate::dispatcher::{Example, Handler};
+use crate::dispatcher::{DispatchError, Example, Handler};
 use log::debug;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
@@ -22,6 +22,10 @@ impl Example for Telegram {
 }
 
 impl Handler for Telegram {
+    fn check(&self) -> Result<(), DispatchError> {
+        todo!()
+    }
+
     fn start_handler(self, receiver: Receiver<String>) {
         let mut handler = TelegramHandler {
             config: self,

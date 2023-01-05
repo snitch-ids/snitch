@@ -5,7 +5,8 @@ mod authentication_logs;
 mod cli;
 pub mod config;
 mod hashing;
-pub mod notifiers;
 mod persist;
 mod style;
 pub mod test_utils;
+
+use multi_dispatcher::message::Message;

@@ -1,8 +1,9 @@
-use crate::dispatcher::{Example, Handler};
-use log::debug;
-use reqwest::header::{HeaderMap, AUTHORIZATION};
+use crate::dispatcher::{DispatchError, Example, Handler};
+use crate::message::Message;
+use log::{debug, info, warn};
+use reqwest::header::{HeaderMap, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
-
+use serde_json;
 use tokio::sync::broadcast::Receiver;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
@@ -21,7 +22,17 @@ impl Example for Backend {
 }
 
 impl Handler for Backend {
+    fn check(&self) -> Result<(), DispatchError> {
+        if self.token.len() == 0 {
+            return Err(DispatchError::Check(
+                "Token length should not be 0".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     fn start_handler(self, receiver: Receiver<String>) {
+        self.check().expect("check failed");
         let mut backend_handler = BackendHandler {
             config: self,
             receiver,
@@ -29,7 +40,7 @@ impl Handler for Backend {
         tokio::spawn(async move {
             backend_handler.start().await;
         });
-        debug!("started backend handlers");
+        warn!("started backend handlers");
     }
 }
 
@@ -39,26 +50,35 @@ pub struct BackendHandler {
 }
 
 /// Dispatch a message to the backend
-async fn send(config: &Backend, message: String) {
+async fn send(config: &Backend, message_content: String) {
+    let message = Message::new_now("Failure".to_string(), message_content);
+    info!("sending to backend... ");
+    let as_json = serde_json::to_string(&message).unwrap();
     let client = reqwest::Client::new();
     let mut headers = HeaderMap::new();
     headers.insert(
         AUTHORIZATION,
-        format!("BEARER: {}", config.token).parse().unwrap(),
+        format!("Bearer {}", config.token).parse().unwrap(),
     );
-    let response = client
+    headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
+
+    client
         .post(config.url.clone())
+        .body(as_json)
         .headers(headers)
-        .body(message.to_string())
         .send()
-        .await;
-    println!("response: {response:#?}");
+        .await
+        .expect("failed sending message");
 }
 
 impl BackendHandler {
     pub async fn start(&mut self) {
         loop {
-            let data = self.receiver.recv().await.unwrap();
+            let data = self
+                .receiver
+                .recv()
+                .await
+                .expect("failed getting data from receiver");
             send(&self.config, data).await;
         }
     }
@@ -73,7 +93,9 @@ fn test_example() {
 async fn test_backend() {
     let backend_config = Backend {
         url: "http://127.0.0.1:8080/messages/".to_string(),
-        token: "M8bf6cTrO0iXE0deqiV85y5NZeNRPNTr".to_string(),
+        token: "!!!INSECUREADMINTOKEN!!!".to_string(),
     };
-    send(&backend_config, "testmessage".to_string()).await;
+
+    let message = Message::new_now("title".to_string(), "content".to_string());
+    send(&backend_config, serde_json::to_string(&message).unwrap()).await;
 }

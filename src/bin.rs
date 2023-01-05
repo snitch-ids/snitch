@@ -10,19 +10,18 @@ use clap::StructOpt;
 use env_logger::Builder;
 use eyre::{Result, WrapErr};
 use log::LevelFilter;
+use multi_dispatcher::message::Dispatcher;
 
 use crate::authentication_logs::watch_authentication_logs;
 use crate::hashing::{init_hash_db, watch_files};
 
 use crate::cli::Cli;
 use crate::config::{load_config_from_file, print_basic_config};
-use crate::notifiers::Dispatcher;
 use crate::persist::validate_hashes;
 mod authentication_logs;
 mod cli;
 mod config;
 mod hashing;
-pub mod notifiers;
 mod persist;
 mod style;
 mod test_utils;
@@ -78,6 +77,9 @@ async fn main() -> Result<()> {
             .expect("failed starting log file watching");
     }
     debug!("Time elapsed: {:?}", start.elapsed());
-    sleep(Duration::from_millis(500));
+    loop {
+        sleep(Duration::from_millis(1000));
+        break;
+    }
     Ok(())
 }

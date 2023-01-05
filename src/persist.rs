@@ -4,12 +4,10 @@ use std::path::{Path, PathBuf};
 use std::str::from_utf8;
 use std::{error, fmt};
 
-use crate::notifiers::Dispatcher;
-use crate::notifiers::{BasicNotification, Message, Notification};
 use crate::style::get_progressbar;
+use multi_dispatcher::message::{BasicNotification, Dispatcher, Message, Notification};
 use sled::{self, Db};
-
-type ResultPersist<T> = std::result::Result<T, Box<dyn error::Error>>;
+type ResultPersist<T> = Result<T, Box<dyn error::Error>>;
 
 pub struct HashMismatch {
     pub file_path: String,
@@ -82,10 +80,7 @@ pub async fn validate_hashes(config: &Config, dispatcher: &Dispatcher) -> Result
 
         let fp = Path::new(&vec_str);
         if !fp.exists() {
-            let content = format!(
-                "directory <b>{}</b> does not exist but was previously there",
-                fp.display()
-            );
+            let content = format!("file or directory removed: <b>{}</b>", fp.display());
             let message = Message::new_now("Filesystem changed".to_owned(), content);
             let notification = BasicNotification { message };
             dispatcher.dispatch(&notification);

@@ -1,4 +1,4 @@
-use crate::dispatcher::{Example, Handler};
+use crate::dispatcher::{DispatchError, Example, Handler};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::Message as LettreMessage;
 use lettre::{SmtpTransport, Transport};
@@ -26,6 +26,10 @@ impl Example for Email {
 }
 
 impl Handler for Email {
+    fn check(&self) -> Result<(), DispatchError> {
+        todo!()
+    }
+
     fn start_handler(self, receiver: Receiver<String>) {
         let mut email_handler = EmailHandler {
             config: self,
