@@ -46,9 +46,10 @@ pub fn open_database(path: &PathBuf) -> ResultPersist<Db> {
     Ok(db)
 }
 
-pub fn upsert_hashes(db: &sled::Db, fp: &Path, file_hash: &str) -> Result<(), HashMismatch> {
+pub fn upsert_hashes(db: &sled::Db, fp: &Path, file_hash: &str, entropy: f32) -> Result<(), HashMismatch> {
     debug!("upserting hash for {:?}", fp);
     let file_path = fp.to_str().unwrap();
+    // let data = (file_hash, entropy);
     let old_value = db
         .insert(file_path, file_hash)
         .expect("something went wrong persisting the hash");

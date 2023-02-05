@@ -12,6 +12,7 @@ use notify::{raw_watcher, RawEvent, RecursiveMode, Watcher};
 use ring::digest::{Context, Digest, SHA256};
 use std::sync::mpsc::channel;
 use walkdir::WalkDir;
+use entropy::shannon_entropy;
 
 use crate::config::Config;
 use crate::persist::{open_database, upsert_hashes};
@@ -128,7 +129,8 @@ async fn check_file_hash(file_path_entry: &Path, db: &Db, dispatcher: &Dispatche
         warn!("{err} on {:?}. Skipping.", file_path_entry);
         format!("{:?}", err)
     });
-    upsert_hashes(db, file_path_entry, &hash).unwrap_or_else(|e| {
+    let entropy = shannon_entropy("teststring");
+    upsert_hashes(db, file_path_entry, &hash, entropy).unwrap_or_else(|e| {
         dispatcher.dispatch(&e);
     });
 }
@@ -163,4 +165,17 @@ pub async fn watch_files(config: &Config, dispatcher: &Dispatcher) {
             Err(e) => println!("watch error: {:?}", e),
         }
     }
+}
+
+struct SnitchData {
+    hash: String,
+    entropy: f32
+}
+
+#[test]
+fn test_entropy() {
+    use entropy;
+    let e = entropy::shannon_entropy("teststring");
+    println!("{e}");
+
 }

@@ -385,6 +385,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "entropy"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e885f8dca86fbf1999f9b4643d6e94e984c5c8b36073404dd227be3e5255f1d5"
+
+[[package]]
 name = "env_logger"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2036,6 +2042,7 @@ version = "0.1.4"
 dependencies = [
  "clap",
  "data-encoding",
+ "entropy",
  "env_logger",
  "eyre",
  "indicatif",
