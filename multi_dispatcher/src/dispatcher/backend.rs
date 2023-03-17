@@ -1,10 +1,15 @@
 use crate::dispatcher::{DispatchError, Example, Handler};
 use crate::message::Message;
-use log::{debug, info, warn};
 use reqwest::header::{HeaderMap, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use tokio::sync::broadcast::Receiver;
+
+#[cfg(not(test))]
+use log::{debug, info, warn};
+
+#[cfg(test)]
+use std::{println as info, println as warn, println as debug}; // Workaround to use prinltn! for logs.
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Backend {
@@ -52,8 +57,9 @@ pub struct BackendHandler {
 /// Dispatch a message to the backend
 async fn send(config: &Backend, message_content: String) {
     let message = Message::new_now("Failure".to_string(), message_content);
-    info!("sending to backend... ");
+    info!("sending to backend.... ");
     let as_json = serde_json::to_string(&message).unwrap();
+    debug!("payload: {as_json}");
     let client = reqwest::Client::new();
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -62,13 +68,20 @@ async fn send(config: &Backend, message_content: String) {
     );
     headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
 
-    client
+    let response = client
         .post(config.url.clone())
         .body(as_json)
         .headers(headers)
         .send()
         .await
         .expect("failed sending message");
+
+    match response.error_for_status_ref() {
+        Ok(_res) => (),
+        Err(err) => {
+            debug!("{err:?}");
+        }
+    }
 }
 
 impl BackendHandler {
@@ -92,7 +105,7 @@ fn test_example() {
 #[tokio::test]
 async fn test_backend() {
     let backend_config = Backend {
-        url: "http://127.0.0.1:8080/messages/".to_string(),
+        url: "http://127.0.0.1:8081/messages/".to_string(),
         token: "!!!INSECUREADMINTOKEN!!!".to_string(),
     };
 
