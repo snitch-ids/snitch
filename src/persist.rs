@@ -28,7 +28,7 @@ impl fmt::Debug for HashMismatch {
 impl Notification for HashMismatch {
     fn message(&self) -> Message {
         let content = format!(": {}", self.file_path);
-        Message::new_now("File was modified".to_owned(), content)
+        Message::new_now("File was modified", content)
     }
 }
 
@@ -81,7 +81,7 @@ pub async fn validate_hashes(config: &Config, dispatcher: &Dispatcher) -> Result
         let fp = Path::new(&vec_str);
         if !fp.exists() {
             let content = format!("file or directory removed: <b>{}</b>", fp.display());
-            let message = Message::new_now("Filesystem changed".to_owned(), content);
+            let message = Message::new_now("Filesystem changed", content);
             let notification = BasicNotification { message };
             dispatcher.dispatch(&notification);
             continue;

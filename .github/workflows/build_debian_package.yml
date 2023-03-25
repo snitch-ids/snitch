@@ -6,6 +6,9 @@ on:
     tags:
       - '*.*.*'
 
+permissions:
+  contents: write
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -15,14 +18,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - name: Setup nightly
-      run: rustup default nightly
     - name: install cargo-deb
       run: cargo install cargo-deb
     - name: Build
       run: cargo deb
+    - name: Rename artifact
+      run: cp target/debian/snitch_*.deb target/debian/snitch-${{ github.ref_name }}.deb
     - name: upload artefact
       uses: actions/upload-artifact@v3
       with:
-        name: snitch_deb
-        path: target/debian/*
+        name: snitch-${{ github.ref_name }}.deb
+        path: target/debian/snitch-${{ github.ref_name }}.deb
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: target/debian/snitch-*.deb

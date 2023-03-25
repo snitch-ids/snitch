@@ -77,9 +77,12 @@ async fn main() -> Result<()> {
             .expect("failed starting log file watching");
     }
     debug!("Time elapsed: {:?}", start.elapsed());
+    dispatcher.stop();
     loop {
         sleep(Duration::from_millis(1000));
         break;
     }
+    // dispatcher.stop();
+
     Ok(())
 }

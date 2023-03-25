@@ -85,7 +85,7 @@ impl Notification for RootElevation {
             "User <b>{}</b> just become root on <code>{}</code>\n{}",
             self.username, self.hostname, self.datetime
         );
-        Message::new_now("Root elevation".to_string(), content)
+        Message::new_now("Root elevation", content)
     }
 }
 
@@ -121,7 +121,7 @@ impl Notification for Login {
             "New login by <b>{}</b> from IP <code>{}</code> on <b>{}</b>\nmethod: {}\n{}",
             self.username, self.ip, self.hostname, self.method, self.datetime
         );
-        Message::new_now("Login".to_string(), content)
+        Message::new_now("Login", content)
     }
 }
 

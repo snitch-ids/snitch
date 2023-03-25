@@ -1,6 +1,6 @@
 use crate::dispatcher::Sender;
 use chrono::{DateTime, Utc};
-use log::{debug, warn};
+use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
@@ -9,15 +9,15 @@ fn get_hostname_string() -> String {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Message {
+pub struct Message<'a> {
     pub hostname: String,
-    pub title: String,
+    pub title: &'a str,
     pub content: String,
     pub timestamp: DateTime<Utc>,
 }
 
-impl Message {
-    pub fn new_now(title: String, content: String) -> Self {
+impl<'a> Message<'a> {
+    pub fn new_now(title: &'a str, content: String) -> Self {
         let timestamp = Utc::now();
         let hostname = get_hostname_string();
         Message {
@@ -55,6 +55,10 @@ impl Dispatcher {
             warn!("Failed sending message. Reason: {}", error);
         }
     }
+
+    pub fn stop(self) {
+        drop(self.tx);
+    }
 }
 
 /// Structs implementing this trait can be dispatched with the [Dispatcher](Dispatcher).
@@ -63,11 +67,11 @@ pub trait Notification {
     fn message(&self) -> Message;
 }
 
-pub struct BasicNotification {
-    pub message: Message,
+pub struct BasicNotification<'a> {
+    pub message: Message<'a>,
 }
 
-impl Notification for BasicNotification {
+impl Notification for BasicNotification<'_> {
     fn message(&self) -> Message {
         self.message.clone()
     }

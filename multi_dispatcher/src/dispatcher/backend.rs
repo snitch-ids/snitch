@@ -9,7 +9,8 @@ use tokio::sync::broadcast::Receiver;
 use log::{debug, info, warn};
 
 #[cfg(test)]
-use std::{println as info, println as warn, println as debug}; // Workaround to use prinltn! for logs.
+use std::{println as info, println as warn, println as debug};
+use tokio::sync::broadcast::error::RecvError; // Workaround to use prinltn! for logs.
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Backend {
@@ -55,11 +56,10 @@ pub struct BackendHandler {
 }
 
 /// Dispatch a message to the backend
-async fn send(config: &Backend, message_content: String) {
-    let message = Message::new_now("Failure".to_string(), message_content);
-    info!("sending to backend.... ");
+async fn send(config: &Backend, message_content: &str) {
+    let message = Message::new_now(&"Failure", message_content.to_owned());
+    info!("sending to backend. ");
     let as_json = serde_json::to_string(&message).unwrap();
-    debug!("payload: {as_json}");
     let client = reqwest::Client::new();
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -87,12 +87,15 @@ async fn send(config: &Backend, message_content: String) {
 impl BackendHandler {
     pub async fn start(&mut self) {
         loop {
-            let data = self
-                .receiver
-                .recv()
-                .await
-                .expect("failed getting data from receiver");
-            send(&self.config, data).await;
+            match self.receiver.recv().await {
+                Ok(data) => {
+                    send(&self.config, &data).await;
+                }
+                Err(e) => {
+                    debug!("{}", e);
+                    break;
+                }
+            }
         }
     }
 }
@@ -105,10 +108,11 @@ fn test_example() {
 #[tokio::test]
 async fn test_backend() {
     let backend_config = Backend {
-        url: "http://127.0.0.1:8081/messages/".to_string(),
-        token: "!!!INSECUREADMINTOKEN!!!".to_string(),
+        url: "http://api.snitch.cool/messages/".to_string(),
+        // token: "!!!INSECUREADMINTOKEN!!!".to_string(),
+        token: "Hm7RoI85N7I9NwjN1igy9ysyh9PGRZqd".to_string(),
     };
 
-    let message = Message::new_now("title".to_string(), "content".to_string());
-    send(&backend_config, serde_json::to_string(&message).unwrap()).await;
+    let message = "TESTMESSAGE";
+    send(&backend_config, message).await;
 }
