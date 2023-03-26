@@ -12,7 +12,6 @@ env:
   TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
-  CARGO_REGISTRY_TOKEN: ${{secrets.CRATES_IO_TOKEN}}
 
 jobs:
 
@@ -34,6 +33,6 @@ jobs:
     - name: Build
       run: cargo build --release --verbose
     - name: cargo login
-      run: cargo login
+      run: cargo login {{ secrets.CRATES_IO_TOKEN }}
     - name: cargo publish
       run: cargo publish
