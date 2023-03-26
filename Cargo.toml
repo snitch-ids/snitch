@@ -6,7 +6,7 @@ members = [
 [package]
 name = "snitch"
 description = "Intrusion detection and file integrity verification"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 license = "MIT"
 readme = "README.md"
