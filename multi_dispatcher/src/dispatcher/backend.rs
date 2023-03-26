@@ -1,21 +1,28 @@
 use crate::dispatcher::{DispatchError, Example, Handler};
 use crate::message::Message;
 use reqwest::header::{HeaderMap, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use tokio::sync::broadcast::Receiver;
+use url::ParseError;
 
 #[cfg(not(test))]
 use log::{debug, info, warn};
 
 #[cfg(test)]
 use std::{println as info, println as warn, println as debug};
-use tokio::sync::broadcast::error::RecvError; // Workaround to use prinltn! for logs.
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Backend {
     pub url: String,
     pub token: String, // replace with MessageToken
+}
+
+fn expand_backend_url(url: &str) -> Result<Url, ParseError> {
+    let expanded = Url::parse(url)?;
+    let expanded = expanded.join("/messages")?;
+    Ok(expanded)
 }
 
 impl Example for Backend {
@@ -56,8 +63,7 @@ pub struct BackendHandler {
 }
 
 /// Dispatch a message to the backend
-async fn send(config: &Backend, message_content: &str) {
-    let message = Message::new_now(&"Failure", message_content.to_owned());
+async fn send_message(config: &Backend, message: Message<'_>) {
     info!("sending to backend. ");
     let as_json = serde_json::to_string(&message).unwrap();
     let client = reqwest::Client::new();
@@ -67,9 +73,9 @@ async fn send(config: &Backend, message_content: &str) {
         format!("Bearer {}", config.token).parse().unwrap(),
     );
     headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
-
+    let url = expand_backend_url(&config.url).expect("failed parsing backend url");
     let response = client
-        .post(config.url.clone())
+        .post(url)
         .body(as_json)
         .headers(headers)
         .send()
@@ -87,32 +93,34 @@ async fn send(config: &Backend, message_content: &str) {
 impl BackendHandler {
     pub async fn start(&mut self) {
         loop {
-            match self.receiver.recv().await {
-                Ok(data) => {
-                    send(&self.config, &data).await;
-                }
-                Err(e) => {
-                    debug!("{}", e);
-                    break;
-                }
+            if let Ok(data) = self.receiver.recv().await {
+                let message: Message = serde_json::from_str(&data).unwrap();
+                send_message(&self.config, message).await;
             }
         }
     }
 }
 
-#[test]
-fn test_example() {
-    Backend::example();
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use needs_env_var::*;
 
-#[tokio::test]
-async fn test_backend() {
-    let backend_config = Backend {
-        url: "http://api.snitch.cool/messages/".to_string(),
-        // token: "!!!INSECUREADMINTOKEN!!!".to_string(),
-        token: "Hm7RoI85N7I9NwjN1igy9ysyh9PGRZqd".to_string(),
-    };
+    #[test]
+    fn test_example() {
+        Backend::example();
+    }
 
-    let message = "TESTMESSAGE";
-    send(&backend_config, message).await;
+    #[tokio::test]
+    async fn test_dispatch_example() {
+        use std;
+
+        let token = std::env::var("SNITCH_BACKEND_TOKEN").unwrap_or_default();
+        let config = Backend {
+            url: "http://api.snitch.cool".to_string(),
+            token,
+        };
+        let test_message = Message::test_example();
+        send_message(&config, test_message).await;
+    }
 }

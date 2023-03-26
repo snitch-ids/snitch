@@ -1373,6 +1373,7 @@ dependencies = [
  "serde_yaml",
  "slack-hook",
  "tokio 1.26.0",
+ "url 2.3.1",
 ]
 
 [[package]]

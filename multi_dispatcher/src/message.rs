@@ -42,6 +42,13 @@ impl<'a> Message<'a> {
         )
     }
 
+    pub(crate) fn markdown(&self) -> String {
+        format!(
+            "*{}*\nhost: {}\n{}\n{}",
+            self.title, self.hostname, self.content, self.timestamp
+        )
+    }
+
     #[cfg(test)]
     pub(crate) fn test_example() -> Self {
         Self {

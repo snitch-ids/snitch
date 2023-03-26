@@ -83,13 +83,8 @@ impl TelegramHandler {
     pub async fn start(&mut self) {
         loop {
             if let Ok(data) = self.receiver.recv().await {
-
                 let message: Message = serde_json::from_str(&data).unwrap();
-                send_telegram(
-                    &self.config.bot_token,
-                    &self.config.chat_id,
-                    message,
-                )
+                send_telegram(&self.config.bot_token, &self.config.chat_id, message)
                     .await
                     .expect("failed sending message");
             }
@@ -100,7 +95,6 @@ impl TelegramHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::Message;
     use needs_env_var::*;
 
     #[test]
