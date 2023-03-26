@@ -33,6 +33,6 @@ jobs:
     - name: Build
       run: cargo build --release --verbose
     - name: cargo login
-      run: cargo login {{ secrets.CRATES_IO_TOKEN }}
+      run: cargo login ${{ secrets.CRATES_IO_TOKEN }}
     - name: cargo publish
       run: cargo publish

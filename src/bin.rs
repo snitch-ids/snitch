@@ -6,7 +6,6 @@ use std::process;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use clap::StructOpt;
 use env_logger::Builder;
 use eyre::{Result, WrapErr};
 use log::LevelFilter;
@@ -16,6 +15,8 @@ use crate::authentication_logs::watch_authentication_logs;
 use crate::hashing::{init_hash_db, watch_files};
 
 use crate::cli::Cli;
+use clap::Parser;
+
 use crate::config::{load_config_from_file, print_basic_config};
 use crate::persist::validate_hashes;
 mod authentication_logs;
