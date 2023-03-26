@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
 fn get_hostname_string() -> String {
-    hostname::get().unwrap().to_str().unwrap().to_owned()
+    hostname::get().unwrap().to_str().unwrap().to_string()
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -33,6 +33,23 @@ impl<'a> Message<'a> {
             "{}\n{}\n{}\n{}",
             self.title, self.hostname, self.content, self.timestamp
         )
+    }
+
+    pub(crate) fn html(&self) -> String {
+        format!(
+            "<b>{}</b>\nhost: {}\n{}\n{}",
+            self.title, self.hostname, self.content, self.timestamp
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_example() -> Self {
+        Self {
+            hostname: "test-hostname.local".to_string(),
+            title: "test-title",
+            content: "Some longer test content".to_string(),
+            timestamp: Utc::now(),
+        }
     }
 }
 
