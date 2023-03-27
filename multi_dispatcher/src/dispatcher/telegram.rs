@@ -38,7 +38,7 @@ impl Handler for Telegram {
     }
 }
 
-async fn send_telegram(
+async fn send_message(
     bot_token: &str,
     chat_id: &str,
     message: Message<'_>,
@@ -84,7 +84,7 @@ impl TelegramHandler {
         loop {
             if let Ok(data) = self.receiver.recv().await {
                 let message: Message = serde_json::from_str(&data).unwrap();
-                send_telegram(&self.config.bot_token, &self.config.chat_id, message)
+                send_message(&self.config.bot_token, &self.config.chat_id, message)
                     .await
                     .expect("failed sending message");
             }
@@ -96,6 +96,7 @@ impl TelegramHandler {
 mod tests {
     use super::*;
     use needs_env_var::*;
+    use std;
 
     #[test]
     fn test_example() {
@@ -104,14 +105,23 @@ mod tests {
 
     #[tokio::test]
     async fn test_dispatch_example() {
+        let bot_token = std::env::var("SNITCH_TELEGRAM_BOT_TOKEN").unwrap_or_default();
+        let chat_id = std::env::var("SNITCH_TELEGRAM_CHAT_ID").unwrap_or_default();
+
+        let test_message = Message::test_example();
+        send_message(&bot_token, &chat_id, test_message)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_status() {
         use std;
 
         let bot_token = std::env::var("SNITCH_TELEGRAM_BOT_TOKEN").unwrap_or_default();
         let chat_id = std::env::var("SNITCH_TELEGRAM_CHAT_ID").unwrap_or_default();
 
         let test_message = Message::test_example();
-        send_telegram(&bot_token, &chat_id, test_message)
-            .await
-            .unwrap();
+        test_connection(&bot_token, &chat_id).await.unwrap();
     }
 }

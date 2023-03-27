@@ -31,6 +31,6 @@ jobs:
     - name: export config
       run: echo "$TEST_CONFIG" > .github/config.txt && cat .github/config.txt | base64 -d > .github/testconfig.yaml
     - name: Run app init
-      run: cargo run -- --init --config-file=.github/testconfig.yaml
+      run: cargo run -- --init --config=.github/testconfig.yaml
     - name: Run app scan
-      run: cargo run -- --scan --config-file=.github/testconfig.yaml
+      run: cargo run -- --scan --config=.github/testconfig.yaml

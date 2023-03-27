@@ -45,8 +45,8 @@ directories:
   - /opt
 sender:
   backend:
-    url: http://api.snitch.cool/messages
-    token: base64encodedsnitch
+    url: http://api.snitch.cool
+    token: base64encodedsnitchtoken
   telegram:
     bot_token: 3892394878927:DLKjsjs-EXAMPLE-exampleJDij4s
     chat_id: 1234567890

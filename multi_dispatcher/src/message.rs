@@ -49,7 +49,6 @@ impl<'a> Message<'a> {
         )
     }
 
-    #[cfg(test)]
     pub(crate) fn test_example() -> Self {
         Self {
             hostname: "test-hostname.local".to_string(),
@@ -57,6 +56,12 @@ impl<'a> Message<'a> {
             content: "Some longer test content".to_string(),
             timestamp: Utc::now(),
         }
+    }
+}
+
+impl Notification for Message<'_> {
+    fn message(&self) -> Message {
+        self.clone()
     }
 }
 
@@ -80,6 +85,11 @@ impl Dispatcher {
         }
     }
 
+    pub fn send_test_message(&self) {
+        let message = Message::test_example();
+        self.dispatch(&message);
+    }
+
     pub fn stop(self) {
         drop(self.tx);
     }
@@ -89,14 +99,4 @@ impl Dispatcher {
 pub trait Notification {
     /// An implementation of this method returns a `String` that will be dispatched to the user.
     fn message(&self) -> Message;
-}
-
-pub struct BasicNotification<'a> {
-    pub message: Message<'a>,
-}
-
-impl Notification for BasicNotification<'_> {
-    fn message(&self) -> Message {
-        self.message.clone()
-    }
 }

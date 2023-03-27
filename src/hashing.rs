@@ -121,7 +121,7 @@ async fn upsert_hash_tree(
 
 async fn check_file_hash(file_path_entry: &Path, db: &Db, dispatcher: &Dispatcher) {
     if is_symlink_or_directory(file_path_entry) {
-        debug!("is symlink. skipping.");
+        debug!("skipping symlink/directory: {:?}", file_path_entry);
         return;
     }
     let hash = hash_file(file_path_entry).await.unwrap_or_else(|err| {

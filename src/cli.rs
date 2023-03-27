@@ -28,7 +28,7 @@ pub struct Cli {
 
     /// Use this config file
     #[clap(long, default_value = DEFAULT_CONFIG)]
-    pub config_file: String,
+    pub config: String,
 
     /// Verbose mode
     #[clap(short, long)]

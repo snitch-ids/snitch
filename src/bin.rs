@@ -46,13 +46,14 @@ async fn main() -> Result<()> {
         process::exit(0);
     }
 
-    let config_file = Path::new(&args.config_file);
+    let config_file = Path::new(&args.config);
 
     let config = load_config_from_file(config_file)
-        .wrap_err(format!("failed loading config file: {}", args.config_file))?;
+        .wrap_err(format!("failed loading config file: {:?}", config_file))?;
     let sender = config.sender.clone();
     let dispatcher = Dispatcher::new(sender);
     let start = Instant::now();
+
     debug!("start!");
     if args.init {
         init_hash_db(&config, &dispatcher)
@@ -79,11 +80,11 @@ async fn main() -> Result<()> {
     }
     debug!("Time elapsed: {:?}", start.elapsed());
     dispatcher.stop();
+
     loop {
         sleep(Duration::from_millis(1000));
         break;
     }
-    // dispatcher.stop();
 
     Ok(())
 }

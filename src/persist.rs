@@ -5,7 +5,7 @@ use std::str::from_utf8;
 use std::{error, fmt};
 
 use crate::style::get_progressbar;
-use multi_dispatcher::message::{BasicNotification, Dispatcher, Message, Notification};
+use multi_dispatcher::message::{Dispatcher, Message, Notification};
 use sled::{self, Db};
 type ResultPersist<T> = Result<T, Box<dyn error::Error>>;
 
@@ -49,20 +49,16 @@ pub fn open_database(path: &PathBuf) -> ResultPersist<Db> {
 pub fn upsert_hashes(db: &sled::Db, fp: &Path, file_hash: &str) -> Result<(), HashMismatch> {
     debug!("upserting hash for {:?}", fp);
     let file_path = fp.to_str().unwrap();
-    let old_value = db
+    if let Some(v) = db
         .insert(file_path, file_hash)
-        .expect("something went wrong persisting the hash");
-
-    match old_value {
-        Some(v) => {
-            if v != file_hash {
-                debug!("hash mismatch on: {file_path}");
-                return Err(HashMismatch {
-                    file_path: file_path.to_string(),
-                });
-            }
+        .expect("something went wrong persisting the hash")
+    {
+        if v != file_hash {
+            debug!("hash mismatch on: {file_path}");
+            return Err(HashMismatch {
+                file_path: file_path.to_string(),
+            });
         }
-        None => (),
     }
     Ok(())
 }
@@ -80,10 +76,9 @@ pub async fn validate_hashes(config: &Config, dispatcher: &Dispatcher) -> Result
 
         let fp = Path::new(&vec_str);
         if !fp.exists() {
-            let content = format!("file or directory removed: <b>{}</b>", fp.display());
-            let message = Message::new_now("Filesystem changed", content);
-            let notification = BasicNotification { message };
-            dispatcher.dispatch(&notification);
+            let content = format!("{}", fp.display());
+            let message = Message::new_now("File/directory removed", content);
+            dispatcher.dispatch(&message);
             continue;
         }
 
