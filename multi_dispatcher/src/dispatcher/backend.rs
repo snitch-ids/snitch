@@ -96,6 +96,8 @@ impl BackendHandler {
             if let Ok(data) = self.receiver.recv().await {
                 let message: Message = serde_json::from_str(&data).unwrap();
                 send_message(&self.config, message).await;
+            } else {
+                break;
             }
         }
     }

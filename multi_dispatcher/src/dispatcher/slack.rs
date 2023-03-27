@@ -74,6 +74,8 @@ impl SlackHandler {
                 send_message(&self.config.webhook_url, &self.config.webhook_url, message)
                     .await
                     .expect("failed sending on slack");
+            } else {
+                break;
             }
         }
     }

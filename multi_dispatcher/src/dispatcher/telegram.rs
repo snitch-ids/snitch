@@ -87,6 +87,8 @@ impl TelegramHandler {
                 send_message(&self.config.bot_token, &self.config.chat_id, message)
                     .await
                     .expect("failed sending message");
+            } else {
+                break;
             }
         }
     }
