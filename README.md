@@ -16,6 +16,13 @@ Installation
 
 Get the `deb` package or precompiled binary for OSX from the [latest release](https://github.com/HerrMuellerluedenscheid/snitch/releases).
 
+## Homebrew
+
+```shell
+brew tap HerrMuellerluedenscheid/snitch
+brew install snitch
+```
+
 ## From source
 
 ```
