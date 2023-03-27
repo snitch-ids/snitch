@@ -94,7 +94,7 @@ impl BackendHandler {
     pub async fn start(&mut self) {
         loop {
             if let Ok(data) = self.receiver.recv().await {
-                let message: Message = serde_json::from_str(&data).unwrap();
+                let message = Message::from_json(&data);
                 send_message(&self.config, message).await;
             } else {
                 break;

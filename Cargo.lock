@@ -1364,6 +1364,7 @@ dependencies = [
  "chrono",
  "futures 0.3.27",
  "hostname",
+ "lazy_static",
  "lettre",
  "log",
  "needs_env_var",

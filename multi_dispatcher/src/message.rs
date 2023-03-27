@@ -1,8 +1,13 @@
 use crate::dispatcher::Sender;
 use chrono::{DateTime, Utc};
+use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
+
+lazy_static! {
+    static ref HOSTNAME: String = hostname::get().unwrap().to_str().unwrap().to_string();
+}
 
 fn get_hostname_string() -> String {
     hostname::get().unwrap().to_str().unwrap().to_string()
@@ -19,9 +24,8 @@ pub struct Message<'a> {
 impl<'a> Message<'a> {
     pub fn new_now(title: &'a str, content: String) -> Self {
         let timestamp = Utc::now();
-        let hostname = get_hostname_string();
         Message {
-            hostname,
+            hostname: (*HOSTNAME).to_string(),
             title,
             content,
             timestamp,
@@ -33,6 +37,14 @@ impl<'a> Message<'a> {
             "{}\n{}\n{}\n{}",
             self.title, self.hostname, self.content, self.timestamp
         )
+    }
+
+    pub(crate) fn as_json(&self) -> String {
+        serde_json::to_string(&self).unwrap()
+    }
+
+    pub(crate) fn from_json(data: &'a str) -> Self {
+        serde_json::from_str(&data).expect("failed json message")
     }
 
     pub(crate) fn html(&self) -> String {
@@ -80,7 +92,7 @@ impl Dispatcher {
 
     pub fn dispatch<T: Notification>(&self, notification: &T) {
         let message = notification.message();
-        if let Some(error) = self.tx.send(message.as_single_string()).err() {
+        if let Some(error) = self.tx.send(message.as_json()).err() {
             warn!("Failed sending message. Reason: {}", error);
         }
     }

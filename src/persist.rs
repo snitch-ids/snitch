@@ -27,7 +27,7 @@ impl fmt::Debug for HashMismatch {
 
 impl Notification for HashMismatch {
     fn message(&self) -> Message {
-        let content = format!(": {}", self.file_path);
+        let content = format!("{}", self.file_path);
         Message::new_now("File was modified", content)
     }
 }
@@ -35,7 +35,7 @@ impl Notification for HashMismatch {
 pub fn open_database(path: &PathBuf) -> ResultPersist<Db> {
     let db_config = sled::Config::default()
         .path(path)
-        .cache_capacity(10_000_000_000)
+        .cache_capacity(10_000_000)
         .flush_every_ms(Some(10000000));
 
     let db = db_config.open().map_err(|err| {
