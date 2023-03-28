@@ -117,10 +117,7 @@ impl Login {
 
 impl Notification for Login {
     fn message(&self) -> Message {
-        let content = format!(
-            "{} (IP {} - {})\n",
-            self.username, self.ip, self.method
-        );
+        let content = format!("{} (IP {} - {})\n", self.username, self.ip, self.method);
         Message::new_now("Login", content)
     }
 }
