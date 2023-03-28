@@ -63,9 +63,9 @@ impl<'a> Message<'a> {
 
     pub(crate) fn test_example() -> Self {
         Self {
-            hostname: "test-hostname.local".to_string(),
-            title: "test-title",
-            content: "Some longer test content".to_string(),
+            hostname: (*HOSTNAME).to_string(),
+            title: "Test Message",
+            content: "This message was sent to test connectivity".to_string(),
             timestamp: Utc::now(),
         }
     }

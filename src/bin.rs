@@ -77,6 +77,8 @@ async fn main() -> Result<()> {
         watch_authentication_logs(&dispatcher, &config)
             .await
             .expect("failed starting log file watching");
+    } else if args.send_test_message {
+        dispatcher.send_test_message();
     }
     debug!("Time elapsed: {:?}", start.elapsed());
     dispatcher.stop();

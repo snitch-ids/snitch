@@ -27,6 +27,10 @@ pub struct Cli {
     pub demo_config: bool,
 
     /// Use this config file
+    #[clap(long)]
+    pub send_test_message: bool,
+
+    /// Use this config file
     #[clap(long, default_value = DEFAULT_CONFIG)]
     pub config: String,
 
