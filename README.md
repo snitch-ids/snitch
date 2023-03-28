@@ -69,10 +69,28 @@ authentication_logs: ~
 snitch_root: /tmp/snitch/
 ```
 
+## Connect to [snitch.cool](snitch.cool)
+
+Go to [snitch.cool](snitch.cool) and `register` with your email and a password.
+Confirm the email address. Go to `Token` and click `Create Token`.
+
+Copy the created token and paste it into the section in your snitch `config.yaml`:
+```yaml
+sender:
+  backend:
+    url: http://api.snitch.cool
+    token: PASTE-TOKEN-HERE
+```
+
 Each `sender` is optional. More to follow... 
 
 Usage
 -----
+
+Test the configured senders:
+```
+snitch --send-test-message
+```
 
 Run the initial scan
 ```
