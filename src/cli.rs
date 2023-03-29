@@ -5,6 +5,7 @@ static DEFAULT_CONFIG: &str = "/etc/snitch/config.yaml";
 /// Get notified when someone intrudes into your system or changes files.
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
+#[command(arg_required_else_help = true)]
 pub struct Cli {
     /// Initialize the database
     #[clap(short, long)]

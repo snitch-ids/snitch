@@ -53,14 +53,14 @@ directories:
 sender:
   backend:
     url: http://api.snitch.cool
-    token: base64encodedsnitchtoken
+    token: MYPERSONALGENERATEDTOKEN
   telegram:
     bot_token: 3892394878927:DLKjsjs-EXAMPLE-exampleJDij4s
     chat_id: 1234567890
   email:
     smtp_user: secure
     smtp_password: secure
-    smtp_server: example-server.org
+    smtp_server: imap.foo.bar
     receiver_address: my-receiving-address@gmail.com
   slack:
     webhook_url: sendmymessagestoslack.com
