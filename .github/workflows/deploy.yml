@@ -3,8 +3,8 @@ name: Deploy
 on:
   workflow_dispatch:
   push:
-#    tags:
-#      - '*.*.*'
+    tags:
+      - '*.*.*'
 
 permissions:
   contents: write
