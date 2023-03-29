@@ -3,8 +3,8 @@ name: Deploy
 on:
   workflow_dispatch:
   push:
-    tags:
-      - '*.*.*'
+#    tags:
+#      - '*.*.*'
 
 permissions:
   contents: write
@@ -34,6 +34,27 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: target/debian/snitch-*.deb
+
+  release-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build Release
+        run: cargo build --release
+      - name: Rename artifact
+        run: ls target/release/
+
+      - name: upload artefact
+        uses: actions/upload-artifact@v3
+        with:
+          name: snitch.exe
+          path: target/release/snitch.exe
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: target/release/snitch.exe
 
   release-osx:
     runs-on: macos-latest
