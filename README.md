@@ -19,7 +19,7 @@ Get the `deb` package or precompiled binary for OSX from the [latest release](ht
 ## Homebrew
 
 ```shell
-brew tap HerrMuellerluedenscheid/snitch
+brew tap snitch-id/snitch
 brew install snitch
 ```
 
@@ -69,9 +69,11 @@ authentication_logs: ~
 snitch_root: /tmp/snitch/
 ```
 
-## Connect to [snitch.cool](snitch.cool)
+Each `sender` is optional.
 
-Go to [snitch.cool](snitch.cool) and `register` with your email and a password.
+## Connect to [snitch.cool](http://snitch.cool)
+
+Go to [snitch.cool](http://snitch.cool) and `register` with your email and a password.
 Confirm the email address. Go to `Token` and click `Create Token`.
 
 Copy the created token and paste it into the section in your snitch `config.yaml`:
@@ -79,10 +81,8 @@ Copy the created token and paste it into the section in your snitch `config.yaml
 sender:
   backend:
     url: http://api.snitch.cool
-    token: PASTE-TOKEN-HERE
+    token: <PASTE-TOKEN-HERE>
 ```
-
-Each `sender` is optional. More to follow... 
 
 Usage
 -----
