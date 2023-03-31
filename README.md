@@ -1,5 +1,5 @@
-Snitch - Intrusion Notification
-===============================
+Snitch - Intrusion Detection System
+===================================
 
 [![Rust](https://github.com/HerrMuellerluedenscheid/snitch/actions/workflows/rust.yml/badge.svg)](https://github.com/HerrMuellerluedenscheid/snitch/actions/workflows/rust.yml)
 
