@@ -68,11 +68,6 @@ impl From<sled::Error> for HashDBError {
 pub async fn init_hash_db(config: &Config, dispatcher: &Dispatcher) -> Result<()> {
     let database_path = config.database_path();
 
-    if database_path.exists() {
-        info!("database already found at: {:?}. Deleting.", &database_path);
-        std::fs::remove_dir_all(&database_path).expect("Failed deleting database.");
-    }
-
     let db = open_database(&database_path)?;
     let progressbar = get_progressbar(config.directories().len() as u64, 1);
     for directory in config.directories() {
@@ -103,16 +98,13 @@ async fn upsert_hash_tree(
         .filter_entry(|e| !config.is_excluded_directory(e));
 
     for entry in walker {
-        let entry_checked = match entry {
+        match entry {
             Err(err) => {
                 warn!("{err}");
                 continue;
             }
-            Ok(value) => value,
+            Ok(value) => check_file_hash(value.path(), db, dispatcher).await,
         };
-
-        let file_path_entry = entry_checked.to_owned();
-        check_file_hash(file_path_entry.path(), db, dispatcher).await;
     }
 
     db.flush_async().await?;

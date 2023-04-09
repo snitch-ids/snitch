@@ -28,6 +28,12 @@ impl Config {
     pub fn database_path(&self) -> PathBuf {
         let database_path = Path::new(&self.snitch_root).join(Path::new("db"));
         assert!(database_path.is_absolute());
+
+        if database_path.exists() {
+            info!("database already found at: {:?}. Deleting.", &database_path);
+            std::fs::remove_dir_all(&database_path).expect("Failed deleting database.");
+        }
+
         database_path
     }
 
