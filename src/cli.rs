@@ -7,7 +7,6 @@ static DEFAULT_CONFIG: &str = "/etc/snitch/config.yaml";
 #[clap(author, version, about, long_about = None)]
 #[command(arg_required_else_help = true)]
 pub struct Cli {
-
     /// Print a demo configuration (e.g. as a template for /etc/snitch/config.yaml)
     #[clap(long)]
     pub demo_config: bool,
