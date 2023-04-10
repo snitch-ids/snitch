@@ -26,7 +26,6 @@ mod hashing;
 mod persist;
 mod style;
 mod test_utils;
-mod entropy;
 
 fn setup_logging(args: &Cli) {
     let filter_level = match args.verbose {

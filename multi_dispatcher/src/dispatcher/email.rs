@@ -1,4 +1,5 @@
 use crate::dispatcher::{DispatchError, Example, Handler};
+use crate::message::Message;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::Message as LettreMessage;
 use lettre::{SmtpTransport, Transport};
@@ -49,14 +50,14 @@ pub struct EmailHandler {
 
 impl EmailHandler {
     /// Dispatch an email
-    async fn send(&self, message: String) {
+    async fn send(&self, message: Message<'_>) {
         let config = &self.config;
         let email = LettreMessage::builder()
             .from("Snitch <noreply@intrusion.detection>".parse().unwrap())
             .reply_to("noreply@intrusion.detection".parse().unwrap())
             .to(config.receiver_address.parse().unwrap())
             .subject("Intrusion Detected")
-            .body(message)
+            .body(message.html())
             .unwrap();
 
         let credentials = Credentials::new(config.smtp_user.clone(), config.smtp_password.clone());
@@ -74,8 +75,12 @@ impl EmailHandler {
 
     pub async fn start(&mut self) {
         loop {
-            let data = self.receiver.recv().await.unwrap();
-            self.send(data).await;
+            if let Ok(data) = self.receiver.recv().await {
+                let message = Message::from_json(&data);
+                self.send(message).await;
+            } else {
+                break;
+            }
         }
     }
 }
