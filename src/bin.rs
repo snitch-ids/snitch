@@ -26,6 +26,7 @@ mod hashing;
 mod persist;
 mod style;
 mod test_utils;
+mod entropy;
 
 fn setup_logging(args: &Cli) {
     let filter_level = match args.verbose {
@@ -56,6 +57,7 @@ async fn main() -> Result<()> {
 
     debug!("start!");
     if args.init {
+        config.clear_database();
         init_hash_db(&config, &dispatcher)
             .await
             .map_err(|err| {
