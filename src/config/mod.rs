@@ -16,25 +16,18 @@ pub struct Config {
     pub snitch_root: String,
 }
 
-fn check_directory_exists(directory: &Path) -> bool {
-    if !directory.exists() {
-        warn!("no such directory: {:?}. Ignoring.", directory);
-        return false;
-    }
-    true
-}
-
 impl Config {
     pub fn database_path(&self) -> PathBuf {
         let database_path = Path::new(&self.snitch_root).join(Path::new("db"));
         assert!(database_path.is_absolute());
-
-        if database_path.exists() {
-            info!("database already found at: {:?}. Deleting.", &database_path);
-            std::fs::remove_dir_all(&database_path).expect("Failed deleting database.");
-        }
-
         database_path
+    }
+
+    pub fn clear_database(&self) {
+        if self.database_path().exists() {
+            info!("database already found at: {:?}. Deleting.", &self.database_path());
+            std::fs::remove_dir_all(&self.database_path()).expect("Failed deleting database.");
+        }
     }
 
     /// get directories as a vector of Paths. Non-existent directories will be ignored with a warning.
@@ -65,6 +58,14 @@ impl Config {
             _ => default::get_config(),
         }
     }
+}
+
+fn check_directory_exists(directory: &Path) -> bool {
+    if !directory.exists() {
+        warn!("no such directory: {:?}. Ignoring.", directory);
+        return false;
+    }
+    true
 }
 
 /// Load the configuration from a file and return a [`Config`](Config) struct.
