@@ -4,6 +4,7 @@ extern crate log;
 mod authentication_logs;
 mod cli;
 pub mod config;
+pub mod entropy;
 mod hashing;
 mod persist;
 mod style;

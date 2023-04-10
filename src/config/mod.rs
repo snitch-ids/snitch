@@ -25,7 +25,10 @@ impl Config {
 
     pub fn clear_database(&self) {
         if self.database_path().exists() {
-            info!("database already found at: {:?}. Deleting.", &self.database_path());
+            info!(
+                "database already found at: {:?}. Deleting.",
+                &self.database_path()
+            );
             std::fs::remove_dir_all(&self.database_path()).expect("Failed deleting database.");
         }
     }

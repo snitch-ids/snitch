@@ -1,9 +1,12 @@
 use sled::Db;
 use std::error::{self, Error};
-use std::fmt;
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::hash::Hash;
+use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
+use std::str::Utf8Error;
+use std::{fmt, fs};
+
 extern crate notify;
 
 use data_encoding::HEXUPPER;
@@ -14,15 +17,38 @@ use std::sync::mpsc::channel;
 use walkdir::WalkDir;
 
 use crate::config::Config;
+use crate::entropy;
+use crate::entropy::Entropy;
 use crate::persist::{open_database, upsert_hashes};
 use crate::style::get_progressbar;
 
 type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
 
+#[derive(Debug, Clone)]
+pub struct HashData {
+    pub(crate) digest: String,
+    pub(crate) entropy: f32,
+}
+
+impl HashData {
+    fn to_string(&self) -> String {
+        format!("{}:{}", self.digest, self.entropy)
+    }
+
+    pub fn from_string(data: &str) -> Self {
+        let s = data.split(":").collect::<Vec<_>>();
+        Self {
+            digest: s[0].parse().unwrap(),
+            entropy: s[1].parse().unwrap(),
+        }
+    }
+}
+
 /// Calculate a `SHA256` hash from `reader`.
-async fn sha256_digest<R: Read>(mut reader: R) -> std::io::Result<Digest> {
+async fn sha256_digest<R: Read>(mut reader: R, length: f32) -> std::io::Result<HashData> {
     let mut context = Context::new(&SHA256);
     let mut buffer = [0; 1024];
+    let mut entropy = Entropy::new();
 
     loop {
         let count = reader.read(&mut buffer)?;
@@ -30,19 +56,29 @@ async fn sha256_digest<R: Read>(mut reader: R) -> std::io::Result<Digest> {
             break;
         }
         context.update(&buffer[..count]);
+        entropy.update(&buffer[..count])
     }
 
-    Ok(context.finish())
+    let e = entropy.shannon_entropy(length);
+    let digest = context.finish();
+    let hex_digest = HEXUPPER.encode(digest.as_ref());
+    let hash_data = HashData {
+        digest: hex_digest,
+        entropy: e,
+    };
+    Ok(hash_data)
 }
 
 /// calculate the hash of a file located at `path`.
-pub async fn hash_file(path: &Path) -> std::io::Result<String> {
-    let input = File::open(path)?;
-    let reader = BufReader::new(input);
-    let digest = sha256_digest(reader).await?;
+pub async fn hash_file(path: &Path) -> std::io::Result<HashData> {
+    let mut input = File::open(path)?;
+    let length = input.metadata().unwrap().len();
 
-    let hash_digest = HEXUPPER.encode(digest.as_ref());
-    Ok(hash_digest)
+    let reader = BufReader::new(input);
+
+    let hash_data = sha256_digest(reader, length as f32).await?;
+
+    Ok(hash_data)
 }
 
 #[derive(Debug)]
@@ -113,16 +149,20 @@ async fn upsert_hash_tree(
 
 async fn check_file_hash(file_path_entry: &Path, db: &Db, dispatcher: &Dispatcher) {
     if is_symlink_or_directory(file_path_entry) {
-        debug!("skipping symlink/directory: {:?}", file_path_entry);
+        // info!("skipping symlink/directory: {:?}", file_path_entry);
         return;
     }
-    let hash = hash_file(file_path_entry).await.unwrap_or_else(|err| {
-        warn!("{err} on {:?}. Skipping.", file_path_entry);
-        format!("{:?}", err)
-    });
-    upsert_hashes(db, file_path_entry, &hash).unwrap_or_else(|e| {
-        dispatcher.dispatch(&e);
-    });
+
+    match hash_file(file_path_entry).await {
+        Ok(hash_data) => {
+            upsert_hashes(db, file_path_entry, &hash_data.to_string()).unwrap_or_else(|e| {
+                dispatcher.dispatch(&e);
+            });
+        }
+        Err(err) => {
+            warn!("{err} on {:?}. Skipping.", file_path_entry);
+        }
+    }
 }
 
 pub async fn watch_files(config: &Config, dispatcher: &Dispatcher) {
@@ -154,5 +194,19 @@ pub async fn watch_files(config: &Config, dispatcher: &Dispatcher) {
             Ok(event) => println!("broken event: {:?}", event),
             Err(e) => println!("watch error: {:?}", e),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::hashing::HashData;
+
+    #[test]
+    fn test_hash_data() {
+        let h = HashData {
+            digest: "digest".to_string(),
+            entropy: 1.0,
+        };
+        let _ = HashData::from_string(h.to_string());
     }
 }

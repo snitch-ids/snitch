@@ -4,9 +4,11 @@ use std::path::{Path, PathBuf};
 use std::str::from_utf8;
 use std::{error, fmt};
 
+use crate::hashing::HashData;
 use crate::style::get_progressbar;
 use multi_dispatcher::message::{Dispatcher, Message, Notification};
 use sled::{self, Db};
+
 type ResultPersist<T> = Result<T, Box<dyn error::Error>>;
 
 pub struct HashMismatch {
@@ -72,7 +74,7 @@ pub async fn validate_hashes(config: &Config, dispatcher: &Dispatcher) -> Result
         progressbar.inc(1);
         let vec = key?;
         let vec_str = from_utf8(&vec.0)?;
-        let former_hash = from_utf8(&vec.1)?;
+        let former_hash = HashData::from_string(from_utf8(&vec.1)?);
 
         let fp = Path::new(&vec_str);
         if !fp.exists() {
@@ -82,7 +84,7 @@ pub async fn validate_hashes(config: &Config, dispatcher: &Dispatcher) -> Result
             continue;
         }
 
-        validate_hash(fp, former_hash).await.unwrap_or_else(|e| {
+        validate_hash(fp, &former_hash).await.unwrap_or_else(|e| {
             dispatcher.dispatch(&e);
             messages.push(e);
         });
@@ -96,16 +98,19 @@ pub async fn validate_hashes(config: &Config, dispatcher: &Dispatcher) -> Result
     Ok(())
 }
 
-async fn validate_hash(fp: &Path, former_hash: &str) -> Result<(), HashMismatch> {
+async fn validate_hash(fp: &Path, former_hash: &HashData) -> Result<(), HashMismatch> {
     if !fp.exists() {
         warn!("the file does not exist anymore!! {}", fp.to_str().unwrap())
     }
-    let hash = hashing::hash_file(fp).await.unwrap_or_else(|err| {
+    let hash_data = hashing::hash_file(fp).await.unwrap_or_else(|err| {
         warn!("{err} on {:?}. Skipping.", fp);
-        format!("{:?}", err)
+        HashData {
+            digest: format!("{:?}", err),
+            entropy: 0.0,
+        }
     });
 
-    if hash != former_hash {
+    if hash_data.digest != former_hash.digest {
         return Err(HashMismatch {
             file_path: String::from(fp.to_str().unwrap()),
         });
