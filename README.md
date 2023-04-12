@@ -19,7 +19,7 @@ Get the `deb` package or precompiled binary for OSX from the [latest release](ht
 ## Homebrew
 
 ```shell
-brew tap snitch-id/snitch
+brew tap snitch-ids/snitch
 brew install snitch
 ```
 
