@@ -1,7 +1,7 @@
 use crate::dispatcher::Sender;
 use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
-use log::{debug, info, warn};
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
@@ -26,13 +26,6 @@ impl<'a> Message<'a> {
             content,
             timestamp,
         }
-    }
-
-    pub(crate) fn as_single_string(&self) -> String {
-        format!(
-            "{}\n{}\n{}\n{}",
-            self.title, self.hostname, self.content, self.timestamp
-        )
     }
 
     pub(crate) fn as_json(&self) -> String {

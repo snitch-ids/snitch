@@ -3,7 +3,7 @@ use crate::message::Message;
 use serde::{Deserialize, Serialize};
 use slack_hook::{PayloadBuilder, Slack as SlackHook};
 use tokio::sync::broadcast::Receiver;
-use validator::{Validate, ValidationError};
+use validator::{Validate};
 
 #[derive(Validate, Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Slack {
@@ -26,8 +26,8 @@ impl Example for Slack {
 
 impl Handler for Slack {
     fn check(&self) -> Result<(), DispatchError> {
-        self.validate();
-        Ok(())
+        self.validate()
+            .map_err(|e| DispatchError::ValidationError(e))
     }
 
     fn start_handler(self, receiver: Receiver<String>) {
@@ -65,9 +65,6 @@ pub struct SlackHandler {
 }
 
 impl SlackHandler {
-    fn self_test(&self, config: &Slack) {
-        assert!(config.channel.starts_with('#'));
-    }
 
     pub async fn start(&mut self) {
         loop {

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::broadcast::Receiver;
 
-use crate::dispatcher::{DispatchError, Example, Handler};
+use crate::dispatcher::{Example, Handler};
 use crate::message::Message;
 use log::debug;
 

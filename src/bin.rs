@@ -84,10 +84,7 @@ async fn main() -> Result<()> {
     debug!("Time elapsed: {:?}", start.elapsed());
     dispatcher.stop();
 
-    loop {
-        sleep(Duration::from_millis(1000));
-        break;
-    }
+    sleep(Duration::from_millis(1000));
 
     Ok(())
 }

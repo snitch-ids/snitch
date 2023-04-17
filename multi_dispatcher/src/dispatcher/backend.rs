@@ -7,13 +7,13 @@ use serde_json;
 use tokio::sync::broadcast::Receiver;
 use url::ParseError;
 
-use validator::{Validate, ValidationError};
+use validator::Validate;
 
 #[cfg(not(test))]
-use log::{debug, info, warn};
+use log::{debug, info};
 
 #[cfg(test)]
-use std::{println as info, println as warn, println as debug};
+use std::{println as info, println as debug};
 
 #[derive(Validate, Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Backend {

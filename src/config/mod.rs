@@ -5,7 +5,7 @@ use walkdir::DirEntry;
 mod default;
 mod macos;
 mod windows;
-use eyre::{Context, ContextCompat, Result};
+use eyre::{Context, Result};
 
 /// Snitch configurations
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
