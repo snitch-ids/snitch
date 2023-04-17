@@ -5,7 +5,7 @@ use walkdir::DirEntry;
 mod default;
 mod macos;
 mod windows;
-use eyre::Result;
+use eyre::{Context, ContextCompat, Result};
 
 /// Snitch configurations
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -25,7 +25,10 @@ impl Config {
 
     pub fn clear_database(&self) {
         if self.database_path().exists() {
-            info!("database already found at: {:?}. Deleting.", &self.database_path());
+            info!(
+                "database already found at: {:?}. Deleting.",
+                &self.database_path()
+            );
             std::fs::remove_dir_all(&self.database_path()).expect("Failed deleting database.");
         }
     }
@@ -69,17 +72,14 @@ fn check_directory_exists(directory: &Path) -> bool {
 }
 
 /// Load the configuration from a file and return a [`Config`](Config) struct.
-pub fn load_config_from_file(path: &Path) -> Result<Config, serde_yaml::Error> {
+pub fn load_config_from_file(path: &Path) -> Result<Config> {
     if !path.exists() {
         println!("No config file: {:?}\nTip: run\n\n  snitch --demo-config > /etc/snitch/config.yaml\n\nto get started.", path);
         process::exit(1);
     }
     let reader = std::fs::File::open(path)
-        .map_err(|e| {
-            error!("Failed opening config file {:?}: {e}", path.to_owned());
-            process::exit(1)
-        })
-        .unwrap();
+        .wrap_err(format!("Failed opening config file {:?}", path.to_owned()))?;
+
     let config = serde_yaml::from_reader(reader)?;
 
     Ok(config)

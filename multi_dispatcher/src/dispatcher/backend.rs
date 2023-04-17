@@ -28,7 +28,7 @@ fn expand_backend_url(url: &str) -> Result<Url, ParseError> {
 impl Example for Backend {
     fn example() -> Self {
         Self {
-            url: "http://localhost:8080/messages/".to_string(),
+            url: "https://api.snitch.cool".to_string(),
             token: "INSERTTOKENHERE".to_string(),
         }
     }
@@ -53,7 +53,7 @@ impl Handler for Backend {
         tokio::spawn(async move {
             backend_handler.start().await;
         });
-        warn!("started backend handlers");
+        debug!("started backend handlers");
     }
 }
 
@@ -119,7 +119,7 @@ mod tests {
 
         let token = std::env::var("SNITCH_BACKEND_TOKEN").unwrap_or_default();
         let config = Backend {
-            url: "http://api.snitch.cool".to_string(),
+            url: "https://api.snitch.cool".to_string(),
             token,
         };
         let test_message = Message::test_example();
