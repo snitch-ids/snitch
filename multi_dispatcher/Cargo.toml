@@ -17,6 +17,8 @@ chrono = { version = "0.4", features = ["serde"] }
 hostname = "0"
 url = "2.3.1"
 lazy_static = "1.4.0"
+thiserror = "1.0.40"
+validator = { verison="0.16.0", features = ["derive"] }
 
 [dev-dependencies]
 needs_env_var = "1.0.0"

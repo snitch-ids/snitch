@@ -1,13 +1,14 @@
 use crate::dispatcher::{DispatchError, Example, Handler};
 use crate::message::Message;
-
 use serde::{Deserialize, Serialize};
 use slack_hook::{PayloadBuilder, Slack as SlackHook};
 use tokio::sync::broadcast::Receiver;
+use validator::{Validate, ValidationError};
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+#[derive(Validate, Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Slack {
     #[serde(default)]
+    #[validate(url)]
     pub webhook_url: String,
 
     #[serde(default)]
@@ -25,7 +26,8 @@ impl Example for Slack {
 
 impl Handler for Slack {
     fn check(&self) -> Result<(), DispatchError> {
-        todo!()
+        self.validate();
+        Ok(())
     }
 
     fn start_handler(self, receiver: Receiver<String>) {

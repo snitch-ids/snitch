@@ -7,15 +7,19 @@ use serde_json;
 use tokio::sync::broadcast::Receiver;
 use url::ParseError;
 
+use validator::{Validate, ValidationError};
+
 #[cfg(not(test))]
 use log::{debug, info, warn};
 
 #[cfg(test)]
 use std::{println as info, println as warn, println as debug};
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+#[derive(Validate, Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Backend {
+    #[validate(url)]
     pub url: String,
+    #[validate(length(equal = 32))]
     pub token: String, // replace with MessageToken
 }
 
@@ -36,11 +40,6 @@ impl Example for Backend {
 
 impl Handler for Backend {
     fn check(&self) -> Result<(), DispatchError> {
-        if self.token.len() == 0 {
-            return Err(DispatchError::Check(
-                "Token length should not be 0".to_string(),
-            ));
-        }
         Ok(())
     }
 
@@ -111,6 +110,13 @@ mod tests {
     #[test]
     fn test_example() {
         Backend::example();
+    }
+
+    #[test]
+    fn test_bad_token() {
+        let mut example = Backend::example();
+        example.token = "".to_string();
+        assert!(example.check().is_err());
     }
 
     #[tokio::test]

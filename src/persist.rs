@@ -27,7 +27,7 @@ impl fmt::Debug for HashMismatch {
 
 impl Notification for HashMismatch {
     fn message(&self) -> Message {
-        let content = format!("{}", self.file_path);
+        let content = self.file_path.to_string();
         Message::new_now("File was modified", content)
     }
 }

@@ -9,10 +9,6 @@ lazy_static! {
     static ref HOSTNAME: String = hostname::get().unwrap().to_str().unwrap().to_string();
 }
 
-fn get_hostname_string() -> String {
-    hostname::get().unwrap().to_str().unwrap().to_string()
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message<'a> {
     pub hostname: String,
@@ -85,7 +81,9 @@ impl Dispatcher {
     pub fn new(sender: Sender) -> Self {
         let (tx, _) = broadcast::channel::<String>(100);
 
-        sender.setup_dispatcher(&tx);
+        sender
+            .setup_dispatcher(&tx)
+            .expect("setting up dispatcher failed");
         debug!("created sender channel");
         Self { tx }
     }

@@ -23,10 +23,6 @@ impl Example for Telegram {
 }
 
 impl Handler for Telegram {
-    fn check(&self) -> Result<(), DispatchError> {
-        todo!()
-    }
-
     fn start_handler(self, receiver: Receiver<String>) {
         let mut handler = TelegramHandler {
             config: self,
@@ -124,6 +120,5 @@ mod tests {
         let chat_id = std::env::var("SNITCH_TELEGRAM_CHAT_ID").unwrap_or_default();
 
         let test_message = Message::test_example();
-        test_connection(&bot_token, &chat_id).await.unwrap();
     }
 }

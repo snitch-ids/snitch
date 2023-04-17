@@ -8,21 +8,26 @@ use email::Email;
 use slack::Slack;
 use telegram::Telegram;
 
+use log::debug;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Receiver;
+use validator::ValidationErrors;
 
-use log::debug;
-
-#[derive(Debug)]
-enum DispatchError {
+#[derive(Error, Debug)]
+pub enum DispatchError {
+    #[error("Dispatcher test failed {:?}", .0)]
     Check(String),
+    #[error("Validation failed {:?}", .0)]
+    ValidationError(ValidationErrors),
 }
 
 /// Bind a handler to a receiver channel if the handler is not `None`.
 macro_rules! setup_handler {
     ($handler:expr, $receiver:expr) => {{
         if let Some(config) = $handler {
+            config.check()?;
             let rx = $receiver.subscribe();
             config.start_handler(rx);
             debug!("started handler");
@@ -57,16 +62,19 @@ impl Example for Sender {
 }
 
 impl Sender {
-    pub fn setup_dispatcher(self, tx: &broadcast::Sender<String>) {
+    pub fn setup_dispatcher(self, tx: &broadcast::Sender<String>) -> Result<(), DispatchError> {
         setup_handler!(self.telegram, tx);
         setup_handler!(self.backend, tx);
         setup_handler!(self.email, tx);
         setup_handler!(self.slack, tx);
+        Ok(())
     }
 }
 
 trait Handler {
-    fn check(&self) -> Result<(), DispatchError>;
+    fn check(&self) -> Result<(), DispatchError> {
+        Ok(())
+    }
     fn start_handler(self, receiver: Receiver<String>);
 }
 

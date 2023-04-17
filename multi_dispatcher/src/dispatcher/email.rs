@@ -6,12 +6,15 @@ use lettre::{SmtpTransport, Transport};
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast::Receiver;
+use validator::Validate;
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone, Validate)]
 pub struct Email {
     pub smtp_user: String,
     pub smtp_password: String,
     pub smtp_server: String,
+
+    #[validate(email)]
     pub receiver_address: String,
 }
 
@@ -21,14 +24,15 @@ impl Example for Email {
             smtp_user: "USERNAME".to_string(),
             smtp_password: "SUPERSECUREPASSWORD".to_string(),
             smtp_server: "".to_string(),
-            receiver_address: "".to_string(),
+            receiver_address: "foo.bar@x.x".to_string(),
         }
     }
 }
 
 impl Handler for Email {
     fn check(&self) -> Result<(), DispatchError> {
-        todo!()
+        self.validate()
+            .map_err(|e| DispatchError::ValidationError(e))
     }
 
     fn start_handler(self, receiver: Receiver<String>) {

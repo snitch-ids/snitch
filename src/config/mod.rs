@@ -29,7 +29,7 @@ impl Config {
                 "database already found at: {:?}. Deleting.",
                 &self.database_path()
             );
-            std::fs::remove_dir_all(&self.database_path()).expect("Failed deleting database.");
+            std::fs::remove_dir_all(self.database_path()).expect("Failed deleting database.");
         }
     }
 
