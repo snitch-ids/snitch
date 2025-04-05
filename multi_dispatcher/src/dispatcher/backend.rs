@@ -14,25 +14,24 @@ use log::{debug, info};
 
 #[cfg(test)]
 use std::{println as info, println as debug};
+use std::str::FromStr;
 
 #[derive(Validate, Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Backend {
-    #[validate(url)]
-    pub url: String,
+    pub url: Url,
     #[validate(length(equal = 32))]
     pub token: String, // replace with MessageToken
 }
 
-fn expand_backend_url(url: &str) -> Result<Url, ParseError> {
-    let expanded = Url::parse(url)?;
-    let expanded = expanded.join("/messages")?;
-    Ok(expanded)
+fn expand_backend_url(url: &Url) -> Result<Url, ParseError> {
+    let url = url.join("/messages")?;
+    Ok(url)
 }
 
 impl Example for Backend {
     fn example() -> Self {
         Self {
-            url: "https://api.snitch.cool".to_string(),
+            url: Url::from_str("https://api.snitch.cool").unwrap(),
             token: "INSERTTOKENHERE".to_string(),
         }
     }
@@ -72,9 +71,9 @@ async fn send_message(config: &Backend, message: Message<'_>) {
         format!("Bearer {}", config.token).parse().unwrap(),
     );
     headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
-    let url = expand_backend_url(&config.url).expect("failed parsing backend url");
+    let url = expand_backend_url(&config.url).expect("failed expanding url");
     let response = client
-        .post(url)
+        .post(config.url.clone())
         .body(as_json)
         .headers(headers)
         .send()
@@ -90,6 +89,7 @@ async fn send_message(config: &Backend, message: Message<'_>) {
 }
 
 impl BackendHandler {
+
     pub async fn start(&mut self) {
         loop {
             if let Ok(data) = self.receiver.recv().await {
