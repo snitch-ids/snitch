@@ -2192,6 +2192,7 @@ dependencies = [
  "serde",
  "serde_yaml",
  "sled",
+ "thiserror",
  "tokio 1.26.0",
  "url 2.3.1",
  "walkdir",

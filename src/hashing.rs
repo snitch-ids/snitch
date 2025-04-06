@@ -5,12 +5,12 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
 extern crate notify;
-
 use data_encoding::HEXUPPER;
 use multi_dispatcher::message::Dispatcher;
 use notify::{raw_watcher, RawEvent, RecursiveMode, Watcher};
 use ring::digest::{Context, Digest, SHA256};
 use std::sync::mpsc::channel;
+use thiserror::Error;
 use walkdir::WalkDir;
 
 use crate::config::Config;
@@ -45,23 +45,10 @@ pub async fn hash_file(path: &Path) -> std::io::Result<String> {
     Ok(hash_digest)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum HashDBError {
-    SledError(sled::Error),
-}
-
-impl Error for HashDBError {}
-
-impl fmt::Display for HashDBError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "An error occurred while interacting with the database!")
-    }
-}
-
-impl From<sled::Error> for HashDBError {
-    fn from(e: sled::Error) -> Self {
-        HashDBError::SledError(e)
-    }
+    #[error(transparent)]
+    SledError(#[from] sled::Error),
 }
 
 /// Initialize the file hash database
