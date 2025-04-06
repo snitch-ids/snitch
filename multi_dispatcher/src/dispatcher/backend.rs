@@ -38,6 +38,7 @@ impl Example for Backend {
 }
 
 impl Handler for Backend {
+
     fn check(&self) -> Result<(), DispatchError> {
         Ok(())
     }

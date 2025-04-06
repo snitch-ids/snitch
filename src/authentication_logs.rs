@@ -50,9 +50,10 @@ pub async fn watch_authentication_logs(
         }
 
         let root_elevations = find_root_elevations(contents_str);
-        for root_elecation in root_elevations.iter() {
-            info!("root elevation {:?}", root_elecation);
-            dispatcher.dispatch(root_elecation);
+
+        for root_elevations in root_elevations.iter() {
+            info!("root elevation {:?}", root_elevations);
+            dispatcher.dispatch(root_elevations);
         }
 
         interval.tick().await;
