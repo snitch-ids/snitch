@@ -19,8 +19,8 @@ path = "src/bin.rs"
 multi_dispatcher = {path="./multi_dispatcher"}
 clap = {version= "4.1.13", features=["derive"]}
 data-encoding = "2.3"
-env_logger = "0.10.0"
-indicatif = "0.16"
+env_logger = "0.11.8"
+indicatif = "0.17.11"
 lazy_static = "1"
 log = "0.4"
 regex = "1.5"
