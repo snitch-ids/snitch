@@ -15,6 +15,7 @@ use log::{debug, info};
 #[cfg(test)]
 use std::{println as info, println as debug};
 use std::str::FromStr;
+use log::warn;
 
 #[derive(Validate, Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Backend {
@@ -74,12 +75,16 @@ async fn send_message(config: &Backend, message: Message<'_>) {
     headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
     let url = expand_backend_url(&config.url).expect("failed expanding url");
     let response = client
-        .post(config.url.clone())
+        .get(config.url.clone())
         .body(as_json)
         .headers(headers)
         .send()
         .await
         .expect("failed sending message");
+
+    if response.status() != reqwest::StatusCode::OK {
+        warn!("response status: {:?}", response.status());
+    };
 
     match response.error_for_status_ref() {
         Ok(_res) => (),
