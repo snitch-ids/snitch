@@ -21,4 +21,4 @@ thiserror = "1.0.40"
 validator = { version="0.16.0", features = ["derive"] }
 
 [dev-dependencies]
-needs_env_var = "1.0.0"
+needs_env_var = "2.0.1"

@@ -1492,6 +1492,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "needs_env_var"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1af03b7948cc130ddd5545479090c4457241d22ea051207886b9aa706ae7f4c9"
+dependencies = [
+ "quote",
+ "syn 2.0.100",
+]
+
+[[package]]
 name = "net2"
 version = "0.2.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2289,6 +2299,7 @@ dependencies = [
  "lazy_static",
  "log",
  "multi_dispatcher",
+ "needs_env_var",
  "notify",
  "regex",
  "ring",

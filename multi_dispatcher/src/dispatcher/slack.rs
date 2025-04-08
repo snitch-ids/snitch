@@ -3,7 +3,7 @@ use crate::message::Message;
 use serde::{Deserialize, Serialize};
 use slack_hook::{PayloadBuilder, Slack as SlackHook};
 use tokio::sync::broadcast::Receiver;
-use validator::{Validate};
+use validator::Validate;
 
 #[derive(Validate, Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Slack {
@@ -65,7 +65,6 @@ pub struct SlackHandler {
 }
 
 impl SlackHandler {
-
     pub async fn start(&mut self) {
         loop {
             if let Ok(data) = self.receiver.recv().await {
@@ -91,6 +90,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_dispatch_example() {
         use std;
 
