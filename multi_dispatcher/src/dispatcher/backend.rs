@@ -104,7 +104,6 @@ impl BackendHandler {
 /// Dispatch a message to the backend
 async fn send_message(config: &Backend, message: Message<'_>) {
     info!("sending to backend. ");
-    let as_json = serde_json::to_string(&message).unwrap();
     let client = reqwest::Client::new();
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -115,20 +114,16 @@ async fn send_message(config: &Backend, message: Message<'_>) {
     let url = expand_backend_url(&config.url).expect("failed expanding url");
     let response = client
         .get(url)
-        .body(as_json)
+        .json(&message)
         .headers(headers)
         .send()
         .await
         .expect("failed sending message");
 
-    if response.status() != reqwest::StatusCode::OK {
-        warn!("response status: {:?}", response.status());
-    };
-
     match response.error_for_status_ref() {
-        Ok(_res) => (),
+        Ok(response) => debug!("response: {:?}", response),
         Err(err) => {
-            debug!("{err:?}");
+            warn!("{err:?}");
         }
     }
 }
