@@ -1,6 +1,4 @@
 use sled::Db;
-use std::error::{self, Error};
-use std::fmt;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
@@ -14,10 +12,8 @@ use thiserror::Error;
 use walkdir::WalkDir;
 
 use crate::config::Config;
-use crate::persist::{open_database, upsert_hashes};
+use crate::persist::{open_database, upsert_hashes, PersistError};
 use crate::style::get_progressbar;
-
-type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
 
 /// Calculate a `SHA256` hash from `reader`.
 async fn sha256_digest<R: Read>(mut reader: R) -> std::io::Result<Digest> {
@@ -49,10 +45,14 @@ pub async fn hash_file(path: &Path) -> std::io::Result<String> {
 pub enum HashDBError {
     #[error(transparent)]
     SledError(#[from] sled::Error),
+    #[error(transparent)]
+    IOError(#[from] std::io::Error),
+    #[error(transparent)]
+    PersistError(#[from] PersistError),
 }
 
 /// Initialize the file hash database
-pub async fn init_hash_db(config: &Config, dispatcher: &Dispatcher) -> Result<()> {
+pub async fn init_hash_db(config: &Config, dispatcher: &Dispatcher) -> Result<(), HashDBError> {
     let database_path = config.database_path();
 
     let db = open_database(&database_path)?;

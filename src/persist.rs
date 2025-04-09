@@ -1,13 +1,21 @@
 use crate::config::Config;
 use crate::hashing;
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::str::from_utf8;
-use std::{error, fmt};
+use thiserror::Error;
 
 use crate::style::get_progressbar;
 use multi_dispatcher::message::{Dispatcher, Message, Notification};
 use sled::{self, Db};
-type ResultPersist<T> = Result<T, Box<dyn error::Error>>;
+
+#[derive(Error, Debug)]
+pub enum PersistError {
+    #[error(transparent)]
+    SledError(#[from] sled::Error),
+    #[error(transparent)]
+    Utf8Error(#[from] std::str::Utf8Error),
+}
 
 pub struct HashMismatch {
     pub file_path: String,
@@ -32,7 +40,7 @@ impl Notification for HashMismatch {
     }
 }
 
-pub fn open_database(path: &PathBuf) -> ResultPersist<Db> {
+pub fn open_database(path: &PathBuf) -> Result<Db, PersistError> {
     let db_config = sled::Config::default()
         .path(path)
         .cache_capacity(10_000_000)
@@ -63,7 +71,7 @@ pub fn upsert_hashes(db: &sled::Db, fp: &Path, file_hash: &str) -> Result<(), Ha
     Ok(())
 }
 
-pub async fn validate_hashes(config: &Config, dispatcher: &Dispatcher) -> ResultPersist<()> {
+pub async fn validate_hashes(config: &Config, dispatcher: &Dispatcher) -> Result<(), PersistError> {
     let db = open_database(&config.database_path())?;
     let progressbar = get_progressbar(db.len() as u64, 10);
     let mut messages: Vec<HashMismatch> = vec![];
@@ -91,14 +99,14 @@ pub async fn validate_hashes(config: &Config, dispatcher: &Dispatcher) -> Result
     for message in messages.pop() {
         warn!("{:?}", message);
     }
-    info!("database checksum: {}", db.checksum().unwrap());
+    info!("database checksum: {}", db.checksum()?);
 
     Ok(())
 }
 
 async fn validate_hash(fp: &Path, former_hash: &str) -> Result<(), HashMismatch> {
     if !fp.exists() {
-        warn!("the file does not exist anymore!! {}", fp.to_str().unwrap())
+        warn!("the file does not exist anymore! {:?}", fp)
     }
     let hash = hashing::hash_file(fp).await.unwrap_or_else(|err| {
         warn!("{err} on {:?}. Skipping.", fp);
