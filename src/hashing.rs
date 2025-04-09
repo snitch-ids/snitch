@@ -44,11 +44,11 @@ pub async fn hash_file(path: &Path) -> std::io::Result<String> {
 #[derive(Debug, Error)]
 pub enum HashDBError {
     #[error(transparent)]
-    SledError(#[from] sled::Error),
+    Sled(#[from] sled::Error),
     #[error(transparent)]
-    IOError(#[from] std::io::Error),
+    IO(#[from] std::io::Error),
     #[error(transparent)]
-    PersistError(#[from] PersistError),
+    Persist(#[from] PersistError),
 }
 
 /// Initialize the file hash database

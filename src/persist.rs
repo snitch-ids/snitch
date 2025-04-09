@@ -46,9 +46,8 @@ pub fn open_database(path: &PathBuf) -> Result<Db, PersistError> {
         .cache_capacity(10_000_000)
         .flush_every_ms(Some(10000000));
 
-    let db = db_config.open().map_err(|err| {
+    let db = db_config.open().inspect_err(|err| {
         println!("Cannot open {:?}", path);
-        err
     })?;
 
     Ok(db)
