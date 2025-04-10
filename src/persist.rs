@@ -46,7 +46,7 @@ pub fn open_database(path: &PathBuf) -> Result<Db, PersistError> {
         .cache_capacity(10_000_000)
         .flush_every_ms(Some(10000000));
 
-    let db = db_config.open().inspect_err(|err| {
+    let db = db_config.open().inspect_err(|_| {
         println!("Cannot open {:?}", path);
     })?;
 
@@ -95,7 +95,7 @@ pub async fn validate_hashes(config: &Config, dispatcher: &Dispatcher) -> Result
         });
     }
     progressbar.finish_with_message("done");
-    for message in messages.pop() {
+    while let Some(message) = messages.pop() {
         warn!("{:?}", message);
     }
     info!("database checksum: {}", db.checksum()?);

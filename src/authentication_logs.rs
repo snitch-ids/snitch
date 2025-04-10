@@ -90,6 +90,7 @@ impl Notification for RootElevation {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct Login {
     username: String,

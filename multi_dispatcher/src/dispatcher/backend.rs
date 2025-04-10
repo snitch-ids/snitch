@@ -3,7 +3,6 @@ use crate::message::Message;
 use reqwest::header::{HeaderMap, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::Url;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
-use serde_json;
 use tokio::sync::broadcast::Receiver;
 use url::ParseError;
 
@@ -93,12 +92,6 @@ impl Handler for Backend {
 pub struct BackendHandler {
     pub(crate) config: Backend,
     pub(crate) receiver: Receiver<String>,
-}
-
-impl BackendHandler {
-    fn new(config: Backend, receiver: Receiver<String>) -> Self {
-        Self { config, receiver }
-    }
 }
 
 /// Dispatch a message to the backend
