@@ -30,7 +30,7 @@ serde_yaml = "0.9.19"
 sled = "0.34"
 tokio = { version = "1.17", features = ["full"] }
 walkdir = "2.3"
-notify = "4.0.17"
+notify = "8.0"
 eyre = "0.6.8"
 url = { version = "2.3.1", features = ["serde"] }
 thiserror = "1.0.40"

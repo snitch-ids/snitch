@@ -106,7 +106,7 @@ async fn send_message(config: &Backend, message: Message<'_>) {
     headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
     let url = expand_backend_url(&config.url).expect("failed expanding url");
     let response = client
-        .get(url)
+        .post(url)
         .json(&message)
         .headers(headers)
         .send()

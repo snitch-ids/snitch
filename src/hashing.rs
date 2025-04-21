@@ -1,16 +1,16 @@
+use data_encoding::HEXUPPER;
+use multi_dispatcher::message::Dispatcher;
+use notify::{Event, RecursiveMode, Watcher};
+use ring::digest::{Context, Digest, SHA256};
 use sled::Db;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
-extern crate notify;
-use data_encoding::HEXUPPER;
-use multi_dispatcher::message::Dispatcher;
-use notify::{raw_watcher, RawEvent, RecursiveMode, Watcher};
-use ring::digest::{Context, Digest, SHA256};
 use std::sync::mpsc::channel;
 use thiserror::Error;
 use walkdir::WalkDir;
 
+extern crate notify;
 use crate::config::Config;
 use crate::persist::{open_database, upsert_hashes, PersistError};
 use crate::style::get_progressbar;
@@ -90,7 +90,7 @@ async fn upsert_hash_tree(
                 warn!("{err}");
                 continue;
             }
-            Ok(value) => check_file_hash(value.path(), db, dispatcher).await,
+            Ok(value) => process_path(db, dispatcher, value.path()).await,
         };
     }
 
@@ -98,16 +98,23 @@ async fn upsert_hash_tree(
     Ok(())
 }
 
-async fn check_file_hash(file_path_entry: &Path, db: &Db, dispatcher: &Dispatcher) {
-    if is_symlink_or_directory(file_path_entry) {
-        debug!("skipping symlink/directory: {:?}", file_path_entry);
+async fn process_event(event: Event, db: &Db, dispatcher: &Dispatcher) {
+    for path in event.paths {
+        process_path(db, dispatcher, &path).await;
+    }
+}
+
+async fn process_path(db: &Db, dispatcher: &Dispatcher, path: &Path) {
+    info!("processing path: {}", path.display());
+    if is_symlink_or_directory(path) {
+        debug!("skipping symlink/directory: {:?}", path);
         return;
     }
-    let hash = hash_file(file_path_entry).await.unwrap_or_else(|err| {
-        warn!("{err} on {:?}. Skipping.", file_path_entry);
+    let hash = hash_file(path).await.unwrap_or_else(|err| {
+        warn!("{err} on {:?}. Skipping.", path);
         format!("{:?}", err)
     });
-    upsert_hashes(db, file_path_entry, &hash).unwrap_or_else(|e| {
+    upsert_hashes(db, path, &hash).unwrap_or_else(|e| {
         dispatcher.dispatch(&e);
     });
 }
@@ -118,7 +125,7 @@ pub async fn watch_files(config: &Config, dispatcher: &Dispatcher) {
 
     // Create a watcher object, delivering raw events.
     // The notification back-end is selected based on the platform.
-    let mut watcher = raw_watcher(tx).unwrap();
+    let mut watcher = notify::recommended_watcher(tx).unwrap();
 
     // Add a path to be watched. All files and directories at that path and
     // below will be monitored for changes.
@@ -129,17 +136,14 @@ pub async fn watch_files(config: &Config, dispatcher: &Dispatcher) {
 
     let db = open_database(&config.database_path()).unwrap();
 
-    loop {
-        match rx.recv() {
-            Ok(RawEvent {
-                path: Some(path),
-                op: Ok(_op),
-                ..
-            }) => {
-                check_file_hash(&path, &db, dispatcher).await;
+    for res in rx {
+        match res {
+            Err(err) => {
+                error!("error while  watching {:?}", err);
             }
-            Ok(event) => println!("broken event: {:?}", event),
-            Err(e) => println!("watch error: {:?}", e),
+            Ok(event) => {
+                process_event(event, &db, dispatcher).await;
+            }
         }
     }
 }
