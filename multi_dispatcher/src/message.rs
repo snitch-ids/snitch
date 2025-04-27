@@ -11,7 +11,7 @@ lazy_static! {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message<'a> {
-    pub hostname: String,
+    pub hostname: &'a str,
     pub title: &'a str,
     pub content: String,
     pub timestamp: DateTime<Utc>,
@@ -21,7 +21,7 @@ impl<'a> Message<'a> {
     pub fn new_now(title: &'a str, content: String) -> Self {
         let timestamp = Utc::now();
         Message {
-            hostname: (*HOSTNAME).to_string(),
+            hostname: &HOSTNAME,
             title,
             content,
             timestamp,
@@ -52,7 +52,7 @@ impl<'a> Message<'a> {
 
     pub(crate) fn test_example() -> Self {
         Self {
-            hostname: (*HOSTNAME).to_string(),
+            hostname: &HOSTNAME,
             title: "Test Message",
             content: "This message was sent to test connectivity".to_string(),
             timestamp: Utc::now(),
