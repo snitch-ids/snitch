@@ -1,7 +1,8 @@
+use chatterbox::message::{Dispatcher, Message};
 use data_encoding::HEXUPPER;
-use multi_dispatcher::message::Dispatcher;
-use notify::{Event, RecursiveMode, Watcher};
+use notify::{Event, EventKind, RecursiveMode, Watcher};
 use ring::digest::{Context, Digest, SHA256};
+use serde_yaml::to_string;
 use sled::Db;
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -12,7 +13,7 @@ use walkdir::WalkDir;
 
 extern crate notify;
 use crate::config::Config;
-use crate::persist::{open_database, upsert_hashes, PersistError};
+use crate::persist::{open_database, upsert_hashes, HashMismatch, PersistError};
 use crate::style::get_progressbar;
 
 /// Calculate a `SHA256` hash from `reader`.
@@ -99,13 +100,34 @@ async fn upsert_hash_tree(
 }
 
 async fn process_event(event: Event, db: &Db, dispatcher: &Dispatcher) {
+    debug!("processing event: {:?}", event);
+
+    let event_kind = match event.kind {
+        EventKind::Any => "unknown event",
+        EventKind::Access(_) => "accessed",
+        EventKind::Create(_) => "created",
+        EventKind::Modify(_) => "modified",
+        EventKind::Remove(_) => "removed",
+        EventKind::Other => "other",
+    };
+
+    let paths = event
+        .paths
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<String>>()
+        .join("\n");
+    let _ = dispatcher
+        .dispatch(&Message::new_now(event_kind, paths))
+        .await
+        .inspect_err(|e| error!("failed to dispatch message: {:?}", e));
     for path in event.paths {
         process_path(db, dispatcher, &path).await;
     }
 }
 
 async fn process_path(db: &Db, dispatcher: &Dispatcher, path: &Path) {
-    info!("processing path: {}", path.display());
+    debug!("processing path: {}", path.display());
     if is_symlink_or_directory(path) {
         debug!("skipping symlink/directory: {:?}", path);
         return;
@@ -114,9 +136,15 @@ async fn process_path(db: &Db, dispatcher: &Dispatcher, path: &Path) {
         warn!("{err} on {:?}. Skipping.", path);
         format!("{:?}", err)
     });
-    upsert_hashes(db, path, &hash).unwrap_or_else(|e| {
-        dispatcher.dispatch(&e);
-    });
+    match upsert_hashes(db, path, &hash) {
+        Ok(_) => {}
+        Err(e) => {
+            dispatcher
+                .dispatch(&e)
+                .await
+                .expect("failed to dispatch error");
+        }
+    };
 }
 
 pub async fn watch_files(config: &Config, dispatcher: &Dispatcher) {
@@ -139,7 +167,7 @@ pub async fn watch_files(config: &Config, dispatcher: &Dispatcher) {
     for res in rx {
         match res {
             Err(err) => {
-                error!("error while  watching {:?}", err);
+                error!("error while watching {:?}", err);
             }
             Ok(event) => {
                 process_event(event, &db, dispatcher).await;

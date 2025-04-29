@@ -1,5 +1,5 @@
 use super::Config;
-use multi_dispatcher::dispatcher::{Example, Sender};
+use chatterbox::dispatcher::{Example, Sender};
 
 pub fn get_config() -> Config {
     Config {

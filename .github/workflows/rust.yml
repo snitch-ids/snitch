@@ -36,9 +36,6 @@ jobs:
     timeout-minutes: 6
     steps:
       - uses: actions/checkout@v3
-      - name: Run tests
-        working-directory: multi_dispatcher
-        run: cargo test
 
   test-app:
     runs-on: ubuntu-latest

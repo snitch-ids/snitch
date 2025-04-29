@@ -10,7 +10,7 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::time;
 
 use crate::config::Config;
-use multi_dispatcher::message::{Dispatcher, Message, Notification};
+use chatterbox::message::{Dispatcher, Message, Notification};
 
 static INTERVAL: u64 = 1000;
 
@@ -154,6 +154,6 @@ async fn parse_test() {
     let logins = find_logins(&data);
     assert_eq!(logins.len(), 2);
 
-    let root_elecations = find_root_elevations(&data);
-    assert_eq!(root_elecations.len(), 1);
+    let root_elevations = find_root_elevations(&data);
+    assert_eq!(root_elevations.len(), 1);
 }

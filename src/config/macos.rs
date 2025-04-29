@@ -1,4 +1,4 @@
-use multi_dispatcher::dispatcher::{Example, Sender};
+use chatterbox::dispatcher::{Example, Sender};
 
 use super::Config;
 

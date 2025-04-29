@@ -6,8 +6,9 @@ use std::str::from_utf8;
 use thiserror::Error;
 
 use crate::style::get_progressbar;
-use multi_dispatcher::message::{Dispatcher, Message, Notification};
+use chatterbox::message::{Dispatcher, Message, Notification};
 use sled::{self, Db};
+use tokio::sync::broadcast::error::SendError;
 
 #[derive(Error, Debug)]
 pub enum PersistError {
@@ -15,6 +16,8 @@ pub enum PersistError {
     SledError(#[from] sled::Error),
     #[error(transparent)]
     Utf8Error(#[from] std::str::Utf8Error),
+    #[error(transparent)]
+    SendError(#[from] SendError<String>),
 }
 
 pub struct HashMismatch {
@@ -73,7 +76,6 @@ pub fn upsert_hashes(db: &sled::Db, fp: &Path, file_hash: &str) -> Result<(), Ha
 pub async fn validate_hashes(config: &Config, dispatcher: &Dispatcher) -> Result<(), PersistError> {
     let db = open_database(&config.database_path())?;
     let progressbar = get_progressbar(db.len() as u64, 10);
-    let mut messages: Vec<HashMismatch> = vec![];
 
     for key in db.iter() {
         progressbar.inc(1);
@@ -85,19 +87,19 @@ pub async fn validate_hashes(config: &Config, dispatcher: &Dispatcher) -> Result
         if !fp.exists() {
             let content = format!("{}", fp.display());
             let message = Message::new_now("File/directory removed", content);
-            dispatcher.dispatch(&message);
+            dispatcher.dispatch(&message).await?;
             continue;
         }
 
-        validate_hash(fp, former_hash).await.unwrap_or_else(|e| {
-            dispatcher.dispatch(&e);
-            messages.push(e);
-        });
+        match validate_hash(fp, former_hash).await {
+            Ok(_) => {}
+            Err(e) => {
+                dispatcher.dispatch(&e).await?;
+                warn!("{:?}", e);
+            }
+        }
     }
     progressbar.finish_with_message("done");
-    while let Some(message) = messages.pop() {
-        warn!("{:?}", message);
-    }
     info!("database checksum: {}", db.checksum()?);
 
     Ok(())

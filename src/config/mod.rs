@@ -11,7 +11,7 @@ use eyre::{Context, Result};
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     pub directories: Vec<String>,
-    pub sender: multi_dispatcher::dispatcher::Sender,
+    pub sender: chatterbox::dispatcher::Sender,
     pub authentication_logs: Option<String>,
     pub snitch_root: String,
 }

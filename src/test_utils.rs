@@ -1,4 +1,4 @@
-use multi_dispatcher::message::Message;
+use chatterbox::message::Message;
 
 #[allow(dead_code)]
 pub fn get_test_message() -> Message<'static> {

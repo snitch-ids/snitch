@@ -6,10 +6,10 @@ use std::process;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
+use chatterbox::message::Dispatcher;
 use env_logger::Builder;
 use eyre::{Result, WrapErr};
 use log::LevelFilter;
-use multi_dispatcher::message::Dispatcher;
 
 use crate::authentication_logs::watch_authentication_logs;
 use crate::hashing::{init_hash_db, watch_files};
