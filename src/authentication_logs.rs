@@ -46,14 +46,20 @@ pub async fn watch_authentication_logs(
         let logins = find_logins(contents_str);
         for login in logins.iter() {
             info!("logins {:?}", login);
-            dispatcher.dispatch(login);
+            let _ = dispatcher
+                .dispatch(login)
+                .await
+                .inspect_err(|e| error!("{:?}", e));
         }
 
         let root_elevations = find_root_elevations(contents_str);
 
         for root_elevations in root_elevations.iter() {
             info!("root elevation {:?}", root_elevations);
-            dispatcher.dispatch(root_elevations);
+            let _ = dispatcher
+                .dispatch(root_elevations)
+                .await
+                .inspect_err(|e| error!("{:?}", e));
         }
 
         interval.tick().await;

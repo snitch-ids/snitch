@@ -2,7 +2,6 @@ use chatterbox::message::{Dispatcher, Message};
 use data_encoding::HEXUPPER;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use ring::digest::{Context, Digest, SHA256};
-use serde_yaml::to_string;
 use sled::Db;
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -13,7 +12,7 @@ use walkdir::WalkDir;
 
 extern crate notify;
 use crate::config::Config;
-use crate::persist::{open_database, upsert_hashes, HashMismatch, PersistError};
+use crate::persist::{open_database, upsert_hashes, PersistError};
 use crate::style::get_progressbar;
 
 /// Calculate a `SHA256` hash from `reader`.

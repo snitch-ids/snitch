@@ -10,6 +10,7 @@ use chatterbox::message::{Dispatcher, Message, Notification};
 use sled::{self, Db};
 use tokio::sync::broadcast::error::SendError;
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Error, Debug)]
 pub enum PersistError {
     #[error(transparent)]

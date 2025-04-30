@@ -3,7 +3,6 @@ extern crate log;
 
 use std::path::Path;
 use std::process;
-use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use chatterbox::message::Dispatcher;
@@ -79,12 +78,15 @@ async fn main() -> Result<()> {
             .await
             .expect("failed starting log file watching");
     } else if args.send_test_message {
-        dispatcher.send_test_message();
+        dispatcher
+            .send_test_message()
+            .await
+            .expect("failed sending test message");
     }
     debug!("Time elapsed: {:?}", start.elapsed());
     dispatcher.stop();
 
-    sleep(Duration::from_millis(1000));
+    tokio::time::sleep(Duration::from_millis(1000)).await;
 
     Ok(())
 }
