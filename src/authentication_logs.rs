@@ -10,7 +10,7 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::time;
 
 use crate::config::Config;
-use chatterbox::message::{Dispatcher, Message, Notification};
+use crate::dispatcher::{MessageBackend, SnitchDispatcher};
 
 static INTERVAL: u64 = 1000;
 
@@ -21,7 +21,7 @@ pub enum WatchLogsError {
 
 /// Watch authentication logs and dispatch a [Notification](notifiers::Notification) if a login was registered.
 pub async fn watch_authentication_logs(
-    dispatcher: &Dispatcher,
+    dispatcher: &SnitchDispatcher,
     config: &Config,
 ) -> Result<(), WatchLogsError> {
     info!("start watching authentication logs");
@@ -47,7 +47,7 @@ pub async fn watch_authentication_logs(
         for login in logins.iter() {
             info!("logins {:?}", login);
             let _ = dispatcher
-                .dispatch(login)
+                .dispatch(login.into())
                 .await
                 .inspect_err(|e| error!("{:?}", e));
         }
@@ -57,7 +57,7 @@ pub async fn watch_authentication_logs(
         for root_elevations in root_elevations.iter() {
             info!("root elevation {:?}", root_elevations);
             let _ = dispatcher
-                .dispatch(root_elevations)
+                .dispatch(root_elevations.into())
                 .await
                 .inspect_err(|e| error!("{:?}", e));
         }
@@ -86,13 +86,13 @@ impl RootElevation {
     }
 }
 
-impl Notification for RootElevation {
-    fn message(&self) -> Message {
-        let content = format!(
+impl From<&RootElevation> for MessageBackend {
+    fn from(value: &RootElevation) -> Self {
+        let body = format!(
             "User <b>{}</b> just become root on <code>{}</code>\n{}",
-            self.username, self.hostname, self.datetime
+            value.username, value.hostname, value.datetime
         );
-        Message::new_now("Root elevation", content)
+        MessageBackend::new_now("Root elevation".to_string(), body)
     }
 }
 
@@ -123,10 +123,15 @@ impl Login {
     }
 }
 
-impl Notification for Login {
-    fn message(&self) -> Message {
-        let content = format!("{} (IP {} - {})\n", self.username, self.ip, self.method);
-        Message::new_now("Login", content)
+impl From<&Login> for MessageBackend {
+    fn from(value: &Login) -> Self {
+        MessageBackend::new_now(
+            "Login detected".to_string(),
+            format!(
+                "User <b>{}</b> just logged in from <code>{}</code> using <code>{}</code>\n{}",
+                value.username, value.ip, value.method, value.datetime
+            ),
+        )
     }
 }
 

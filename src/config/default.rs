@@ -14,7 +14,9 @@ pub fn get_config() -> Config {
             "/etc".to_owned(),
         ],
         sender: Sender::example(),
-        authentication_logs: Some("/var/log/auth.log".to_owned()),
+        authentication_logs: None,
         snitch_root: "/etc/snitch".to_owned(),
+        url: Config::default_url(),
+        token: "SDFOIJSDFOIJSDFOIJ".to_string(),
     }
 }

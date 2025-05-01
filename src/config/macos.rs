@@ -13,5 +13,7 @@ pub fn get_config() -> Config {
         authentication_logs: None,
         sender: Sender::example(),
         snitch_root: "/etc/snitch".to_owned(),
+        url: Config::default_url(),
+        token: Config::default_token(),
     }
 }
