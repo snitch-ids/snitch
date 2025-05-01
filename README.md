@@ -52,7 +52,7 @@ directories:
   - /opt
 sender:
   backend:
-    url: http://api.snitch.cool
+    url: https://api.snitch.cool
     token: MYPERSONALGENERATEDTOKEN
   telegram:
     bot_token: 3892394878927:DLKjsjs-EXAMPLE-exampleJDij4s
@@ -80,7 +80,7 @@ Copy the created token and paste it into the section in your snitch `config.yaml
 ```yaml
 sender:
   backend:
-    url: http://api.snitch.cool
+    url: https://api.snitch.cool
     token: <PASTE-TOKEN-HERE>
 ```
 

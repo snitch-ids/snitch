@@ -5,15 +5,14 @@ use std::path::Path;
 use std::process;
 use std::time::{Duration, Instant};
 
-use chatterbox::message::Dispatcher;
 use env_logger::Builder;
 use eyre::{Result, WrapErr};
 use log::LevelFilter;
 
 use crate::authentication_logs::watch_authentication_logs;
-use crate::hashing::{init_hash_db, watch_files};
-
 use crate::cli::Cli;
+use crate::dispatcher::{ConfigBackend, SnitchDispatcher};
+use crate::hashing::{init_hash_db, watch_files};
 use clap::Parser;
 
 use crate::config::{load_config_from_file, print_basic_config};
@@ -21,6 +20,7 @@ use crate::persist::validate_hashes;
 mod authentication_logs;
 mod cli;
 mod config;
+mod dispatcher;
 mod hashing;
 mod persist;
 mod style;
@@ -50,7 +50,11 @@ async fn main() -> Result<()> {
     let config = load_config_from_file(config_file)
         .wrap_err(format!("failed loading config file: {:?}", config_file))?;
     let sender = config.sender.clone();
-    let dispatcher = Dispatcher::new(sender);
+    let config_backend = ConfigBackend {
+        token: config.token.clone(),
+        url: config.url.clone(),
+    };
+    let dispatcher = SnitchDispatcher::new(sender, config_backend);
     let start = Instant::now();
 
     debug!("start!");
@@ -84,8 +88,6 @@ async fn main() -> Result<()> {
             .expect("failed sending test message");
     }
     debug!("Time elapsed: {:?}", start.elapsed());
-    dispatcher.stop();
-
     tokio::time::sleep(Duration::from_millis(1000)).await;
 
     Ok(())

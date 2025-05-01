@@ -1,4 +1,3 @@
-use chatterbox::message::{Dispatcher, Message};
 use data_encoding::HEXUPPER;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use ring::digest::{Context, Digest, SHA256};
@@ -12,6 +11,7 @@ use walkdir::WalkDir;
 
 extern crate notify;
 use crate::config::Config;
+use crate::dispatcher::{MessageBackend, SnitchDispatcher};
 use crate::persist::{open_database, upsert_hashes, PersistError};
 use crate::style::get_progressbar;
 
@@ -52,7 +52,10 @@ pub enum HashDBError {
 }
 
 /// Initialize the file hash database
-pub async fn init_hash_db(config: &Config, dispatcher: &Dispatcher) -> Result<(), HashDBError> {
+pub async fn init_hash_db(
+    config: &Config,
+    dispatcher: &SnitchDispatcher,
+) -> Result<(), HashDBError> {
     let database_path = config.database_path();
 
     let db = open_database(&database_path)?;
@@ -77,7 +80,7 @@ fn is_symlink_or_directory(entry: &Path) -> bool {
 async fn upsert_hash_tree(
     db: &Db,
     config: &Config,
-    dispatcher: &Dispatcher,
+    dispatcher: &SnitchDispatcher,
     start_path: &Path,
 ) -> std::io::Result<()> {
     let walker = WalkDir::new(start_path)
@@ -98,34 +101,37 @@ async fn upsert_hash_tree(
     Ok(())
 }
 
-async fn process_event(event: Event, db: &Db, dispatcher: &Dispatcher) {
+async fn process_event(event: Event, dispatcher: &SnitchDispatcher) {
     debug!("processing event: {:?}", event);
-
-    let event_kind = match event.kind {
-        EventKind::Any => "unknown event",
-        EventKind::Access(_) => "accessed",
-        EventKind::Create(_) => "created",
-        EventKind::Modify(_) => "modified",
-        EventKind::Remove(_) => "removed",
-        EventKind::Other => "other",
-    };
-
-    let paths = event
-        .paths
-        .iter()
-        .map(|p| p.display().to_string())
-        .collect::<Vec<String>>()
-        .join("\n");
     let _ = dispatcher
-        .dispatch(&Message::new_now(event_kind, paths))
+        .dispatch(event.into())
         .await
         .inspect_err(|e| error!("failed to dispatch message: {:?}", e));
-    for path in event.paths {
-        process_path(db, dispatcher, &path).await;
+}
+
+impl From<Event> for MessageBackend {
+    fn from(event: Event) -> Self {
+        let title = match event.kind {
+            EventKind::Any => "unknown event",
+            EventKind::Access(_) => "accessed",
+            EventKind::Create(_) => "created",
+            EventKind::Modify(_) => "modified",
+            EventKind::Remove(_) => "removed",
+            EventKind::Other => "other",
+        };
+        Self::new_now(
+            title.to_string(),
+            event
+                .paths
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<String>>()
+                .join("\n"),
+        )
     }
 }
 
-async fn process_path(db: &Db, dispatcher: &Dispatcher, path: &Path) {
+async fn process_path(db: &Db, dispatcher: &SnitchDispatcher, path: &Path) {
     debug!("processing path: {}", path.display());
     if is_symlink_or_directory(path) {
         debug!("skipping symlink/directory: {:?}", path);
@@ -139,14 +145,14 @@ async fn process_path(db: &Db, dispatcher: &Dispatcher, path: &Path) {
         Ok(_) => {}
         Err(e) => {
             dispatcher
-                .dispatch(&e)
+                .dispatch(e.into())
                 .await
                 .expect("failed to dispatch error");
         }
     };
 }
 
-pub async fn watch_files(config: &Config, dispatcher: &Dispatcher) {
+pub async fn watch_files(config: &Config, dispatcher: &SnitchDispatcher) {
     // Create a channel to receive the events.
     let (tx, rx) = channel();
 
@@ -161,15 +167,13 @@ pub async fn watch_files(config: &Config, dispatcher: &Dispatcher) {
         watcher.watch(directory, RecursiveMode::Recursive).unwrap();
     }
 
-    let db = open_database(&config.database_path()).unwrap();
-
     for res in rx {
         match res {
             Err(err) => {
                 error!("error while watching {:?}", err);
             }
             Ok(event) => {
-                process_event(event, &db, dispatcher).await;
+                process_event(event, dispatcher).await;
             }
         }
     }

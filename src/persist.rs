@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use std::str::from_utf8;
 use thiserror::Error;
 
+use crate::dispatcher::{MessageBackend, SnitchDispatcher};
 use crate::style::get_progressbar;
-use chatterbox::message::{Dispatcher, Message, Notification};
 use sled::{self, Db};
 use tokio::sync::broadcast::error::SendError;
 
@@ -37,10 +37,12 @@ impl fmt::Debug for HashMismatch {
     }
 }
 
-impl Notification for HashMismatch {
-    fn message(&self) -> Message {
-        let content = self.file_path.to_string();
-        Message::new_now("File was modified", content)
+impl From<HashMismatch> for MessageBackend {
+    fn from(value: HashMismatch) -> Self {
+        MessageBackend::new_now(
+            "Hash mismatch".to_string(),
+            format!("File was modified: {}", value.file_path),
+        )
     }
 }
 
@@ -74,7 +76,10 @@ pub fn upsert_hashes(db: &sled::Db, fp: &Path, file_hash: &str) -> Result<(), Ha
     Ok(())
 }
 
-pub async fn validate_hashes(config: &Config, dispatcher: &Dispatcher) -> Result<(), PersistError> {
+pub async fn validate_hashes(
+    config: &Config,
+    dispatcher: &SnitchDispatcher,
+) -> Result<(), PersistError> {
     let db = open_database(&config.database_path())?;
     let progressbar = get_progressbar(db.len() as u64, 10);
 
@@ -86,17 +91,19 @@ pub async fn validate_hashes(config: &Config, dispatcher: &Dispatcher) -> Result
 
         let fp = Path::new(&vec_str);
         if !fp.exists() {
-            let content = format!("{}", fp.display());
-            let message = Message::new_now("File/directory removed", content);
-            dispatcher.dispatch(&message).await?;
+            let message = MessageBackend::new_now(
+                "File/directory removed".to_string(),
+                fp.to_str().unwrap().to_string(),
+            );
+            dispatcher.dispatch(message).await?;
             continue;
         }
 
         match validate_hash(fp, former_hash).await {
             Ok(_) => {}
             Err(e) => {
-                dispatcher.dispatch(&e).await?;
                 warn!("{:?}", e);
+                dispatcher.dispatch(e.into()).await?;
             }
         }
     }

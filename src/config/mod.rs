@@ -12,8 +12,30 @@ use eyre::{Context, Result};
 pub struct Config {
     pub directories: Vec<String>,
     pub sender: chatterbox::dispatcher::Sender,
-    pub authentication_logs: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authentication_logs: Option<PathBuf>,
+    #[serde(default = "Config::default_root")]
     pub snitch_root: String,
+    #[serde(default = "Config::default_url")]
+    pub url: String,
+    #[serde(default = "Config::default_token")]
+    pub token: String,
+}
+
+impl Config {
+    pub(crate) fn default_token() -> String {
+        "PASTEYOURTOKENHERE".to_string()
+    }
+}
+
+impl Config {
+    pub(crate) fn default_url() -> String {
+        "https://api.snitch.cool".to_string()
+    }
+
+    pub(crate) fn default_root() -> String {
+        "/etc/snitch/".to_string()
+    }
 }
 
 impl Config {

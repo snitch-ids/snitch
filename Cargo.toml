@@ -16,7 +16,7 @@ name = "snitch"
 path = "src/bin.rs"
 
 [dependencies]
-chatterbox = "1.0"
+chatterbox = {path = "../chatterbox"}
 clap = {version= "4.1.13", features=["derive"]}
 data-encoding = "2.3"
 env_logger = "0.11.8"
@@ -33,6 +33,9 @@ walkdir = "2.3"
 notify = { version = "8.0" , features = ["serde"]}
 eyre = "0.6.8"
 thiserror = "1.0.40"
+reqwest = "0.11.27"
+chrono = {version =  "0.4.41", features = ["serde"] }
+hostname = "^0.4"
 
 [dev-dependencies]
 needs_env_var = "2.0.1"
