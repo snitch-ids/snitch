@@ -1,14 +1,22 @@
 use chatterbox::message::{Dispatcher, Message, Notification};
 use chrono::{DateTime, Utc};
+use lazy_static::lazy_static;
 use reqwest::header::{HeaderMap, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
-use std::ffi::OsString;
 use tokio::sync::broadcast::error::SendError as BroadcastSendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
+lazy_static! {
+    static ref HOSTNAME: String = hostname::get()
+        .expect("failed to get hostname")
+        .to_str()
+        .unwrap()
+        .to_owned();
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct MessageBackend {
-    pub hostname: OsString,
+    pub hostname: String,
     pub title: String,
     pub body: String,
     pub timestamp: DateTime<Utc>,
@@ -17,7 +25,7 @@ pub struct MessageBackend {
 impl Notification for MessageBackend {
     fn message(&self) -> Message {
         let title = self.title.clone();
-        let body = format!("{}\n\n{:?}\n{}", self.body, self.hostname, self.timestamp);
+        let body = format!("{}\n\n{}\n{}", self.body, *HOSTNAME, self.timestamp);
         Message { title, body }
     }
 }
@@ -26,7 +34,7 @@ impl MessageBackend {
     pub fn new_now(title: String, body: String) -> Self {
         let timestamp = Utc::now();
         Self {
-            hostname: hostname::get().unwrap(),
+            hostname: HOSTNAME.clone(),
             title,
             body,
             timestamp,
@@ -50,7 +58,7 @@ struct BackendActor<T> {
     config: ConfigBackend,
 }
 
-impl<T> BackendActor<T> {
+impl<T: Serialize> BackendActor<T> {
     async fn run(&mut self) {
         while let Some(message) = self.receiver.recv().await {
             self.send_message(message).await;
@@ -72,7 +80,7 @@ impl<T> BackendActor<T> {
         let url = self.config.url.clone() + "/messages";
         let response = client
             .post(url)
-            // .json(&message)
+            .json(&message)
             .headers(headers)
             .send()
             .await
@@ -115,8 +123,11 @@ impl SnitchDispatcher {
     }
 
     pub async fn send_test_message(&self) -> Result<(), BroadcastSendError<String>> {
-        self.dispatcher_chatterbox.send_test_message().await?;
-        // self.sender.send("test".to_string()).await.unwrap();
+        self.dispatch(MessageBackend::new_now(
+            "test".to_string(),
+            "test".to_string(),
+        ))
+        .await?;
         Ok(())
     }
 }
