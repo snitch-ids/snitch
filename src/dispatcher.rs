@@ -62,12 +62,11 @@ impl<T: Serialize> BackendActor<T> {
     async fn run(&mut self) {
         while let Some(message) = self.receiver.recv().await {
             self.send_message(message).await;
-            // sleep(Duration::from_secs(1)).await;
         }
     }
 
     async fn send_message(&self, message: T) {
-        info!("sending to backend. ");
+        debug!("sending to backend.");
         let client = reqwest::Client::new();
 
         let mut headers = HeaderMap::new();
@@ -78,13 +77,19 @@ impl<T: Serialize> BackendActor<T> {
 
         headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
         let url = self.config.url.clone() + "/messages";
-        let response = client
+        let response = match client
             .post(url)
             .json(&message)
             .headers(headers)
             .send()
             .await
-            .expect("failed sending message");
+        {
+            Ok(response) => response,
+            Err(err) => {
+                error!("{err:?}");
+                return;
+            }
+        };
 
         match response.error_for_status_ref() {
             Ok(response) => debug!("response: {:?}", response),
