@@ -122,7 +122,7 @@ impl SnitchDispatcher {
         &self,
         message: MessageBackend,
     ) -> Result<(), BroadcastSendError<String>> {
-        self.dispatcher_chatterbox.dispatch(&message).await?;
+        self.dispatcher_chatterbox.dispatch(&message)?;
         self.sender.send(message).await.unwrap();
         Ok(())
     }
