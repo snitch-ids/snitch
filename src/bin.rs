@@ -21,6 +21,8 @@ mod authentication_logs;
 mod cli;
 mod config;
 mod dispatcher;
+#[cfg(all(feature = "ebpf", target_os = "linux"))]
+mod ebpf;
 mod hashing;
 mod persist;
 mod style;
@@ -77,6 +79,16 @@ async fn main() -> Result<()> {
             .expect("Checking files failed");
     } else if args.watch_files {
         watch_files(&config, &dispatcher).await;
+    } else if args.watch_ebpf {
+        #[cfg(all(feature = "ebpf", target_os = "linux"))]
+        ebpf::watch_ebpf(&config, &dispatcher)
+            .await
+            .wrap_err("BPF file monitoring failed")?;
+        #[cfg(not(all(feature = "ebpf", target_os = "linux")))]
+        {
+            error!("this snitch was built without BPF support (Linux, cargo feature `ebpf`)");
+            process::exit(1);
+        }
     } else if args.watch_authentications {
         watch_authentication_logs(&dispatcher, &config)
             .await

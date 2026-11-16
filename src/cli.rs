@@ -35,6 +35,14 @@ pub struct Cli {
     #[clap(long)]
     pub watch_authentications: bool,
 
+    /// Watch the files from the database with BPF LSM programs: reports
+    /// writes (re-hashed when the writer closes the file), removal, renames,
+    /// hard links, permission and owner changes, and new entries in the
+    /// configured directories, with the process that did it. Needs root,
+    /// Linux with the BPF LSM active, and a build with the `ebpf` feature.
+    #[clap(long)]
+    pub watch_ebpf: bool,
+
     /// Verbose mode
     #[clap(short, long)]
     pub verbose: bool,

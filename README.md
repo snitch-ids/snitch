@@ -112,6 +112,24 @@ Watch authentication logs:
 snitch --watch-authentications
 ```
 
+Watch files with BPF LSM programs (Linux, experimental):
+```
+snitch --watch-ebpf
+```
+This reports, with the process that did it: writes to files from the
+database (re-hashed when the writer closes the file, reported on mismatch),
+removal, renames and replacement, new hard links, permission and owner
+changes, and new entries in the configured directories. It needs root, a
+kernel with `CONFIG_BPF_LSM` and BTF, `bpf` in the active LSMs
+(`cat /sys/kernel/security/lsm`), and a build with the `ebpf` feature:
+```
+rustup toolchain install nightly --component rust-src
+cargo install bpf-linker
+cargo build --release --features ebpf
+```
+`build.rs` builds the BPF programs in `snitch-ebpf/` with nightly. To use a
+prebuilt object instead (e.g. in Yocto), set `SNITCH_BPF_OBJ=<path>`.
+
 Performance
 -----------
 

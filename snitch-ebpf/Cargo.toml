@@ -1,0 +1,40 @@
+[package]
+name = "snitch-ebpf"
+description = "snitch's BPF LSM programs"
+version = "0.1.0"
+edition = "2021"
+# Built by Yocto wrynose's Rust (1.94) via meta-snitch's cargo-bpf class,
+# or with nightly by ../build.rs.
+rust-version = "1.94"
+license = "MIT"
+
+[dependencies]
+# aya-ebpf 0.3 needs Rust 1.98
+aya-ebpf = "=0.2.1"
+snitch-ebpf-common = { path = "../snitch-ebpf-common" }
+
+[[bin]]
+name = "snitch-ebpf"
+path = "src/main.rs"
+
+[profile.dev]
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
+lto = true
+panic = "abort"
+incremental = false
+codegen-units = 1
+rpath = false
+
+[profile.release]
+lto = true
+panic = "abort"
+codegen-units = 1
+debug = 2
+
+# Own workspace: built for bpfel-unknown-none with -Z build-std=core, not
+# together with the userspace crates.
+[workspace]
+resolver = "3"

@@ -37,8 +37,24 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 chrono = {version =  "0.4.41", features = ["serde"] }
 hostname = "^0.4"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# aya 0.14: newest release that builds with Rust 1.94 (Yocto wrynose);
+# aya 0.15+ needs 1.98.
+aya = { version = "=0.14.0", default-features = false, optional = true }
+snitch-ebpf-common = { path = "snitch-ebpf-common", features = ["user"], optional = true }
+
 [dev-dependencies]
 needs_env_var = "1.1.0"
 
 [features]
 experimental = []
+# `snitch --watch-ebpf`: BPF LSM file monitoring (Linux >= 5.7 with
+# CONFIG_BPF_LSM, "bpf" in the active LSMs, and kernel BTF). See build.rs for
+# how the BPF object is built.
+ebpf = ["dep:aya", "dep:snitch-ebpf-common"]
+
+[workspace]
+members = [".", "snitch-ebpf-common"]
+# Built for the BPF target by build.rs (or by Yocto), not with the workspace.
+exclude = ["snitch-ebpf"]
+resolver = "3"
