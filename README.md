@@ -69,7 +69,8 @@ authentication_logs: ~
 snitch_root: /tmp/snitch/
 ```
 
-Each `sender` is optional.
+Each `sender` is optional. Set `token: ""` to not send messages to the
+[snitch.cool](http://snitch.cool) backend; they are still logged.
 
 ## Connect to [snitch.cool](http://snitch.cool)
 

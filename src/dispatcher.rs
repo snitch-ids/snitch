@@ -60,8 +60,16 @@ struct BackendActor<T> {
 
 impl<T: Serialize> BackendActor<T> {
     async fn run(&mut self) {
+        // An empty token disables the backend (e.g. a device that only logs
+        // its messages, or uses the chatterbox senders).
+        let enabled = !self.config.token.is_empty();
+        if !enabled {
+            info!("no backend token configured; messages are not sent to the backend");
+        }
         while let Some(message) = self.receiver.recv().await {
-            self.send_message(message).await;
+            if enabled {
+                self.send_message(message).await;
+            }
         }
     }
 
