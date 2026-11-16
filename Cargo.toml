@@ -41,7 +41,9 @@ hostname = "^0.4"
 # aya 0.14: newest release that builds with Rust 1.94 (Yocto wrynose);
 # aya 0.15+ needs 1.98.
 aya = { version = "=0.14.0", default-features = false, optional = true }
+sd-notify = { version = "0.5.0", features = ["fdstore"], optional = true }
 snitch-ebpf-common = { path = "snitch-ebpf-common", features = ["user"], optional = true }
+snitch-ebpf-loader = { path = "snitch-ebpf-loader", optional = true }
 
 [dev-dependencies]
 needs_env_var = "1.1.0"
@@ -49,12 +51,13 @@ needs_env_var = "1.1.0"
 [features]
 experimental = []
 # `snitch --watch-ebpf`: BPF LSM file monitoring (Linux >= 5.7 with
-# CONFIG_BPF_LSM, "bpf" in the active LSMs, and kernel BTF). See build.rs for
-# how the BPF object is built.
-ebpf = ["dep:aya", "dep:snitch-ebpf-common"]
+# CONFIG_BPF_LSM, "bpf" in the active LSMs, and kernel BTF). See
+# snitch-ebpf-loader/build.rs for how the BPF object is built.
+ebpf = ["dep:aya", "dep:snitch-ebpf-common", "dep:snitch-ebpf-loader", "dep:sd-notify"]
 
 [workspace]
-members = [".", "snitch-ebpf-common"]
-# Built for the BPF target by build.rs (or by Yocto), not with the workspace.
+members = [".", "snitch-ebpf-common", "snitch-ebpf-loader"]
+# Built for the BPF target by snitch-ebpf-loader/build.rs (or by Yocto), not
+# with the workspace.
 exclude = ["snitch-ebpf"]
 resolver = "3"

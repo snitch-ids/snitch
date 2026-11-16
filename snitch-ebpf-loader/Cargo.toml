@@ -1,0 +1,20 @@
+[package]
+name = "snitch-ebpf-loader"
+description = "Loads snitch's BPF programs; snitch-ebpf-load pins them from the initramfs"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+name = "snitch_ebpf_loader"
+
+[[bin]]
+name = "snitch-ebpf-load"
+path = "src/main.rs"
+
+[dependencies]
+# aya 0.14: newest release that builds with Rust 1.94 (Yocto wrynose).
+aya = { version = "=0.14.0", default-features = false }
+eyre = "0.6.8"
+libc = "0.2"
+snitch-ebpf-common = { path = "../snitch-ebpf-common", features = ["user"] }

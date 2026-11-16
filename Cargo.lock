@@ -1859,6 +1859,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
+name = "sd-notify"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e4ef7359e694bfaf1dd27a30f9d760b54c00dfae9f19bd0c05a39bc9128fe76"
+dependencies = [
+ "libc",
+ "sendfd",
+]
+
+[[package]]
 name = "security-framework"
 version = "2.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1878,6 +1888,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49db231d56a190491cb4aeda9527f1ad45345af50b0851622a7adb8c03b01c32"
 dependencies = [
  "core-foundation-sys",
+ "libc",
+]
+
+[[package]]
+name = "sendfd"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8fa82bbd0ce6c16273ec6c310d3973f8b8f8665ecfe0ca02a49b3ea61b2418c"
+dependencies = [
  "libc",
 ]
 
@@ -2018,10 +2037,12 @@ dependencies = [
  "regex",
  "reqwest",
  "ring",
+ "sd-notify",
  "serde",
  "serde_yaml",
  "sled",
  "snitch-ebpf-common",
+ "snitch-ebpf-loader",
  "thiserror 1.0.69",
  "tokio",
  "walkdir",
@@ -2032,6 +2053,16 @@ name = "snitch-ebpf-common"
 version = "0.1.0"
 dependencies = [
  "aya",
+]
+
+[[package]]
+name = "snitch-ebpf-loader"
+version = "0.1.0"
+dependencies = [
+ "aya",
+ "eyre",
+ "libc",
+ "snitch-ebpf-common",
 ]
 
 [[package]]

@@ -128,8 +128,25 @@ rustup toolchain install nightly --component rust-src
 cargo install bpf-linker
 cargo build --release --features ebpf
 ```
-`build.rs` builds the BPF programs in `snitch-ebpf/` with nightly. To use a
-prebuilt object instead (e.g. in Yocto), set `SNITCH_BPF_OBJ=<path>`.
+`snitch-ebpf-loader/build.rs` builds the BPF programs in `snitch-ebpf/` with
+nightly. To use a prebuilt object instead (e.g. in Yocto), set
+`SNITCH_BPF_OBJ=<path>`.
+
+Started like this, snitch loads the programs itself, and they stay attached
+while it runs. On a device, load them at boot instead, from an initramfs
+bundled into the kernel (the Yocto layer meta-snitch does this):
+```
+snitch-ebpf-load --root /rootfs --cgroup /sys/fs/cgroup
+```
+`snitch-ebpf-load` (in `snitch-ebpf-loader/`) attaches the monitoring
+programs plus self-protection, and pins them in `/sys/fs/bpf/snitch`. Then
+`snitch --watch-ebpf` claims the pinned maps; from then on, even root can't
+open them, detach or unpin the programs, unmount bpffs, `/sys` or `/`, write
+`kernel.ftrace_enabled` (which would disarm them), kill or ptrace snitch, or
+ptrace init. Refused attempts are reported as "Tamper attempt blocked". Run
+it as a systemd `Type=notify` service with `FileDescriptorStoreMax=8` and
+`FileDescriptorStorePreserve=yes`: snitch keeps the map fds in systemd's fd
+store and gets them back from there after a restart.
 
 Performance
 -----------

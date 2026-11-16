@@ -1,4 +1,4 @@
-//! Provides the BPF object for the `ebpf` feature as `SNITCH_BPF_OBJECT`.
+//! Provides the BPF object (`../snitch-ebpf`) as `SNITCH_BPF_OBJECT`.
 //!
 //! - `SNITCH_BPF_OBJ=<path>`: use a prebuilt object (Yocto: meta-snitch's
 //!   cargo-bpf class builds it with the target's Rust and LLVM).
@@ -14,10 +14,8 @@ use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-env-changed=SNITCH_BPF_OBJ");
-    if env::var_os("CARGO_FEATURE_EBPF").is_none()
-        || env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("linux")
-    {
-        return;
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("linux") {
+        panic!("snitch-ebpf-loader is Linux only");
     }
 
     if let Some(obj) = env::var_os("SNITCH_BPF_OBJ") {
@@ -30,7 +28,10 @@ fn main() {
         return;
     }
 
-    let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
+        .parent()
+        .unwrap()
+        .to_owned();
     let manifest = root.join("snitch-ebpf/Cargo.toml");
     for p in [
         "snitch-ebpf/src",

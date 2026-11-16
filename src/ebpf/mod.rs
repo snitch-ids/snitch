@@ -4,27 +4,38 @@
 //! The programs in `snitch-ebpf` run on the LSM hooks for writes,
 //! truncation, unlink, rename, hard links, creation, chmod and chown. They
 //! report operations on the files in the hash database and on entries of the
-//! configured directories, identified by (device, inode). This module loads
-//! them, fills their watch map, and turns their events into messages. A file
-//! that was opened for writing is hashed again when the writer closes it, and
+//! configured directories, identified by (device, inode). This module fills
+//! their watch map and turns their events into messages. A file that was
+//! opened for writing is hashed again when the writer closes it, and
 //! reported if the hash differs from the database. Deleted inodes leave the
 //! watch map when the kernel frees them, before their number can be reused.
-mod btf;
+//!
+//! Two ways to get the programs:
+//! - Pinned (meta-snitch): `snitch-ebpf-load` attached them from the
+//!   initramfs, with self-protection, and pinned their maps. The daemon claims
+//!   the maps; from then on nobody else can open them. It stores the map fds
+//!   in systemd's fd store and gets them back from there after a restart.
+//!   Refused tamper attempts are reported.
+//! - Fallback (no pins): load and attach the monitoring programs here. They
+//!   stay attached while this process runs.
 
 use std::collections::HashMap as StdHashMap;
-use std::os::unix::fs::MetadataExt;
+use std::os::fd::{AsFd, FromRawFd, OwnedFd};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use aya::maps::{HashMap, MapData, PerCpuArray, RingBuf};
-use aya::programs::Lsm;
-use aya::{Btf as AyaBtf, EbpfLoader};
+use aya::maps::{Array, HashMap, Map, MapData, PerCpuArray, RingBuf};
+use aya::Ebpf;
 use eyre::{bail, ContextCompat, Result, WrapErr};
 use snitch_ebpf_common::{
-    Event, InodeKey, EV_CHMOD, EV_CHOWN, EV_CLOSE_WRITE, EV_CREATE, EV_INODE_FREED, EV_LINK,
-    EV_OPEN_WRITE, EV_RENAME_FROM, EV_RENAME_OVER, EV_TRUNCATE, EV_UNLINK, STAT_DROPPED,
-    STAT_READ_ERRORS, WATCH_DIR, WATCH_FILE,
+    Event, InodeKey, ABI_VERSION, CTL_ABI, CTL_DAEMON_TGID, CTL_LOCKED, EV_CHMOD, EV_CHOWN,
+    EV_CLOSE_WRITE, EV_CREATE, EV_INODE_FREED, EV_LINK, EV_OPEN_WRITE, EV_RENAME_FROM,
+    EV_RENAME_OVER, EV_TAMPER, EV_TRUNCATE, EV_UNLINK, STAT_DROPPED, STAT_READ_ERRORS,
+    TAMPER_BPF_CMD, TAMPER_KILL, TAMPER_MAP_FD, TAMPER_MOVE_MOUNT, TAMPER_PIN_RENAME,
+    TAMPER_PIN_UNLINK, TAMPER_PIVOT_ROOT, TAMPER_PTRACE, TAMPER_SYSCTL, TAMPER_UMOUNT, WATCH_DIR,
+    WATCH_FILE,
 };
+use snitch_ebpf_loader::{inode_key, LoadOptions, DAEMON_MAPS, PIN_DIR};
 use tokio::io::unix::AsyncFd;
 use tokio::sync::mpsc;
 use walkdir::WalkDir;
@@ -34,75 +45,17 @@ use crate::dispatcher::{MessageBackend, SnitchDispatcher};
 use crate::hashing::hash_file;
 use crate::persist::open_database;
 
-static BPF_OBJ: &[u8] = aya::include_bytes_aligned!(env!("SNITCH_BPF_OBJECT"));
-
-/// LSM hooks with a program in `snitch-ebpf` (program name = hook name).
-const PROGRAMS: &[&str] = &[
-    "file_open",
-    "file_release",
-    "path_truncate",
-    "path_chmod",
-    "path_chown",
-    "path_unlink",
-    "path_rename",
-    "path_link",
-    "path_mknod",
-    "path_mkdir",
-    "path_symlink",
-    "inode_free_security",
-];
-
 /// Hash a file again this long after it was opened for writing, in case the
 /// writer keeps it open.
 const OPEN_WRITE_RECHECK: Duration = Duration::from_secs(5);
 /// LSM hooks run before the operation; look at the result this much later.
 const AFTER_OPERATION: Duration = Duration::from_secs(1);
 const STATS_INTERVAL: Duration = Duration::from_secs(30);
-
-/// Values for the programs' `OFF_*` globals: member offsets of the kernel
-/// structs they read, from the running kernel's BTF.
-fn struct_offsets() -> Result<Vec<(&'static str, u32)>> {
-    let btf = btf::Btf::from_file(Path::new("/sys/kernel/btf/vmlinux"))
-        .wrap_err("reading kernel BTF (needs CONFIG_DEBUG_INFO_BTF)")?;
-    let get = |s: &str, m: &str, size: u32| -> Result<u32> {
-        let member = btf.member(s, m)?;
-        if member.size != size {
-            bail!(
-                "{s}.{m} has size {}, the BPF programs read {size}",
-                member.size
-            );
-        }
-        Ok(member.offset)
-    };
-    Ok(vec![
-        ("OFF_FILE_F_MODE", get("file", "f_mode", 4)?),
-        ("OFF_FILE_F_INODE", get("file", "f_inode", 8)?),
-        ("OFF_INODE_I_INO", get("inode", "i_ino", 8)?),
-        ("OFF_INODE_I_SB", get("inode", "i_sb", 8)?),
-        ("OFF_INODE_I_NLINK", get("inode", "i_nlink", 4)?),
-        ("OFF_SB_S_DEV", get("super_block", "s_dev", 4)?),
-        ("OFF_PATH_DENTRY", get("path", "dentry", 8)?),
-        ("OFF_DENTRY_D_INODE", get("dentry", "d_inode", 8)?),
-        (
-            "OFF_DENTRY_D_NAME_NAME",
-            get("dentry", "d_name", 16)? + get("qstr", "name", 8)?,
-        ),
-    ])
-}
-
-/// Userspace `st_dev` (glibc encoding) to the kernel's internal `dev_t`.
-fn kernel_dev(st_dev: u64) -> u64 {
-    let major = ((st_dev >> 8) & 0xfff) | ((st_dev >> 32) & 0xffff_f000);
-    let minor = (st_dev & 0xff) | ((st_dev >> 12) & 0xffff_ff00);
-    (major << 20) | minor
-}
-
-fn inode_key(md: &std::fs::Metadata) -> InodeKey {
-    InodeKey {
-        dev: kernel_dev(md.dev()),
-        ino: md.ino(),
-    }
-}
+/// Report a repeated tamper attempt (same kind, detail and process name) at
+/// most this often.
+const TAMPER_REPEAT: Duration = Duration::from_secs(60);
+/// Names of the map fds in systemd's fd store: prefix + map name.
+const FDNAME_PREFIX: &str = "snitch-map-";
 
 fn check_bpf_lsm_active() -> Result<()> {
     // securityfs may not be mounted; then attaching tells us.
@@ -152,7 +105,120 @@ struct Monitor<'a> {
     baseline: StdHashMap<PathBuf, String>,
     /// Last mismatching hash reported per file, to report each change once.
     reported: StdHashMap<PathBuf, String>,
+    /// When each kind of tamper attempt was last reported.
+    tamper_reported: StdHashMap<(u64, u64, String), Instant>,
     later: mpsc::UnboundedSender<Later>,
+}
+
+/// The maps the daemon works with.
+struct Maps {
+    watched: MapData,
+    events: MapData,
+    stats: MapData,
+    /// Fallback mode: keeps the programs attached.
+    _bpf: Option<Ebpf>,
+}
+
+/// Fallback: load and attach the monitoring programs in this process.
+fn load_here(n_watch: usize) -> Result<Maps> {
+    // Room for files that get a new inode while we run.
+    let max_watched = (n_watch + n_watch / 4 + 1024) as u32;
+    let mut bpf = snitch_ebpf_loader::load(&LoadOptions {
+        max_watched,
+        protect: None,
+    })?;
+    snitch_ebpf_loader::attach_monitor(&mut bpf)?;
+    let mut take = |name: &str| -> Result<MapData> {
+        match bpf
+            .take_map(name)
+            .wrap_err_with(|| format!("map {name} missing"))?
+        {
+            Map::HashMap(m) | Map::RingBuf(m) | Map::PerCpuArray(m) => Ok(m),
+            _ => bail!("map {name} has an unexpected type"),
+        }
+    };
+    let watched = take("WATCHED")?;
+    let events = take("EVENTS")?;
+    let stats = take("STATS")?;
+    Ok(Maps {
+        watched,
+        events,
+        stats,
+        _bpf: Some(bpf),
+    })
+}
+
+/// Pinned: claim the maps the boot loader pinned. After a restart they come
+/// from systemd's fd store (nobody can open the pins any more).
+fn claim_pinned() -> Result<Maps> {
+    let mut maps: StdHashMap<String, MapData> = StdHashMap::new();
+    if let Ok(fds) = sd_notify::listen_fds_with_names() {
+        for (fd, name) in fds {
+            let fd = unsafe { OwnedFd::from_raw_fd(fd) };
+            if let Some(map) = name.strip_prefix(FDNAME_PREFIX) {
+                maps.insert(map.to_owned(), MapData::from_fd(fd)?);
+            }
+        }
+    }
+    let from_store = !maps.is_empty();
+    for name in DAEMON_MAPS {
+        if maps.contains_key(*name) {
+            continue;
+        }
+        let pin = Path::new(PIN_DIR).join(format!("map_{name}"));
+        let map = MapData::from_pin(&pin).wrap_err_with(|| {
+            format!(
+                "opening {}. If this is \"Operation not permitted\", another process \
+                 claimed snitch's maps first.",
+                pin.display()
+            )
+        })?;
+        maps.insert(name.to_string(), map);
+    }
+    if from_store {
+        info!("BPF maps from systemd's fd store");
+    } else if std::env::var_os("NOTIFY_SOCKET").is_some() {
+        for (name, map) in &maps {
+            let fdname = format!("{FDNAME_PREFIX}{name}");
+            // FDPOLL=0: systemd drops stored fds that poll with EPOLLERR,
+            // which BPF maps other than ring buffers always do.
+            sd_notify::notify_with_fds(
+                &[
+                    sd_notify::NotifyState::FdStore,
+                    sd_notify::NotifyState::FdName(&fdname),
+                    sd_notify::NotifyState::Custom("FDPOLL=0"),
+                ],
+                &[map.fd().as_fd()],
+            )
+            .wrap_err("storing map fds with systemd (FileDescriptorStoreMax)")?;
+        }
+    } else {
+        warn!(
+            "not started by systemd: snitch's BPF maps can't be opened again after this \
+             process exits (until reboot)"
+        );
+    }
+
+    let mut control: Array<MapData, u32> =
+        Array::try_from(Map::Array(maps.remove("CONTROL").unwrap()))?;
+    let abi = control.get(&CTL_ABI, 0)?;
+    if abi != ABI_VERSION {
+        bail!(
+            "the BPF programs loaded at boot are ABI version {abi}, this snitch needs \
+             {ABI_VERSION}. Kernel image (initramfs) and root file system don't match."
+        );
+    }
+    // From now on nobody else gets an fd for snitch's maps, and this process
+    // is protected from signals and ptrace.
+    control.set(CTL_LOCKED, 1, 0)?;
+    control.set(CTL_DAEMON_TGID, std::process::id(), 0)?;
+
+    Ok(Maps {
+        watched: maps.remove("WATCHED").unwrap(),
+        events: maps.remove("EVENTS").unwrap(),
+        stats: maps.remove("STATS").unwrap(),
+        _bpf: None,
+    })
 }
 
 pub async fn watch_ebpf(config: &Config, dispatcher: &SnitchDispatcher) -> Result<()> {
@@ -202,43 +268,47 @@ pub async fn watch_ebpf(config: &Config, dispatcher: &SnitchDispatcher) -> Resul
     }
     let n_dirs = by_key.len() - n_files;
 
-    // Room for files that get a new inode while we run.
-    let max_entries = (by_key.len() + by_key.len() / 4 + 1024) as u32;
-    let offsets = struct_offsets()?;
-    let mut loader = EbpfLoader::new();
-    loader.map_max_entries("WATCHED", max_entries);
-    for (name, value) in &offsets {
-        loader.override_global(name, value, true);
+    let pinned = Path::new(PIN_DIR).join("map_CONTROL").exists();
+    let maps = if pinned {
+        claim_pinned()?
+    } else {
+        load_here(by_key.len())?
+    };
+    let capacity = maps.watched.info()?.max_entries() as usize;
+    let mut map: HashMap<MapData, InodeKey, u32> = HashMap::try_from(Map::HashMap(maps.watched))?;
+    // After a restart the map still holds the previous run's entries.
+    let stale: Vec<InodeKey> = map
+        .keys()
+        .filter_map(|k| k.ok())
+        .filter(|k| !by_key.contains_key(k))
+        .collect();
+    for key in &stale {
+        let _ = map.remove(key);
     }
-    let mut bpf = loader.load(BPF_OBJ).wrap_err("loading the BPF object")?;
-
-    let btf = AyaBtf::from_sys_fs().wrap_err("reading kernel BTF")?;
-    for name in PROGRAMS {
-        let prog: &mut Lsm = bpf
-            .program_mut(name)
-            .wrap_err_with(|| format!("BPF program {name} missing"))?
-            .try_into()?;
-        prog.load(name, &btf)
-            .wrap_err_with(|| format!("loading BPF LSM program {name}"))?;
-    }
-
-    let mut map: HashMap<MapData, InodeKey, u32> =
-        HashMap::try_from(bpf.take_map("WATCHED").wrap_err("map WATCHED missing")?)?;
+    let mut not_watched = 0;
     for (key, watch) in &by_key {
-        map.insert(key, watch.kind, 0)?;
+        if map.insert(key, watch.kind, 0).is_err() {
+            not_watched += 1;
+        }
     }
-
-    for name in PROGRAMS {
-        let prog: &mut Lsm = bpf.program_mut(name).unwrap().try_into()?;
-        prog.attach()
-            .wrap_err_with(|| format!("attaching BPF LSM program {name}"))?;
+    if not_watched > 0 {
+        warn!(
+            "the BPF watch map is full ({capacity} entries): {not_watched} files and \
+             directories are not watched. Raise snitch-ebpf-load --max-watched."
+        );
     }
-    info!("watching {n_files} files and {n_dirs} directories with BPF LSM programs");
+    info!(
+        "watching {n_files} files and {n_dirs} directories with BPF LSM programs ({})",
+        if pinned {
+            "loaded at boot"
+        } else {
+            "loaded by this process"
+        }
+    );
 
-    let events = RingBuf::try_from(bpf.take_map("EVENTS").wrap_err("map EVENTS missing")?)?;
-    let mut events = AsyncFd::new(events)?;
-    let stats: PerCpuArray<MapData, u64> =
-        PerCpuArray::try_from(bpf.take_map("STATS").wrap_err("map STATS missing")?)?;
+    let mut events = AsyncFd::new(RingBuf::try_from(Map::RingBuf(maps.events))?)?;
+    let stats: PerCpuArray<MapData, u64> = PerCpuArray::try_from(Map::PerCpuArray(maps.stats))?;
+    let _keep_attached = maps._bpf;
     let (later_tx, mut later_rx) = mpsc::unbounded_channel();
     let mut monitor = Monitor {
         dispatcher,
@@ -247,8 +317,12 @@ pub async fn watch_ebpf(config: &Config, dispatcher: &SnitchDispatcher) -> Resul
         by_path,
         baseline,
         reported: StdHashMap::new(),
+        tamper_reported: StdHashMap::new(),
         later: later_tx,
     };
+    if std::env::var_os("NOTIFY_SOCKET").is_some() {
+        let _ = sd_notify::notify(&[sd_notify::NotifyState::Ready]);
+    }
 
     let mut stats_tick = tokio::time::interval(STATS_INTERVAL);
     let mut dropped_reported = 0;
@@ -295,6 +369,47 @@ pub async fn watch_ebpf(config: &Config, dispatcher: &SnitchDispatcher) -> Resul
     }
 }
 
+/// What a refused tamper attempt (`EV_TAMPER`) tried to do.
+fn tamper_description(what: u64, detail: u64, name: &str) -> String {
+    let fs = |magic: u64| match magic {
+        0xcafe_4a11 => "snitch's bpffs",
+        0x6265_6572 => "sysfs",
+        _ => "the root file system",
+    };
+    match what {
+        TAMPER_SYSCTL => {
+            "write to kernel.ftrace_enabled (would disarm all BPF LSM programs)".into()
+        }
+        TAMPER_BPF_CMD => format!(
+            "bpf() {} (would detach or replace a BPF program)",
+            match detail {
+                29 => "BPF_LINK_UPDATE",
+                34 => "BPF_LINK_DETACH",
+                _ => "command",
+            }
+        ),
+        TAMPER_MAP_FD => format!("opening one of snitch's BPF maps (id {detail})"),
+        TAMPER_PIN_UNLINK => format!("removing {PIN_DIR}/{name}"),
+        TAMPER_PIN_RENAME => format!("renaming {PIN_DIR}/{name}"),
+        TAMPER_UMOUNT => format!(
+            "unmounting {} (would release snitch's BPF programs)",
+            fs(detail)
+        ),
+        TAMPER_MOVE_MOUNT => "moving a mount (could release snitch's BPF programs)".into(),
+        TAMPER_PIVOT_ROOT => "pivot_root".into(),
+        TAMPER_KILL => format!("signal {detail} to snitch"),
+        TAMPER_PTRACE => format!(
+            "ptrace access to {}",
+            if detail == 1 {
+                "init (holds snitch's map fds)".to_string()
+            } else {
+                format!("snitch (pid {detail})")
+            }
+        ),
+        _ => format!("unknown kind {what}"),
+    }
+}
+
 fn stat_total(stats: &PerCpuArray<MapData, u64>, idx: u32) -> Result<u64> {
     Ok(stats.get(&idx, 0)?.iter().sum())
 }
@@ -322,6 +437,10 @@ impl Monitor<'_> {
     }
 
     async fn handle(&mut self, ev: &Event) {
+        if ev.kind == EV_TAMPER {
+            self.tamper(ev).await;
+            return;
+        }
         let key = InodeKey {
             dev: ev.dev,
             ino: ev.ino,
@@ -398,6 +517,27 @@ impl Monitor<'_> {
         }
     }
 
+    async fn tamper(&mut self, ev: &Event) {
+        let comm = c_str(&ev.comm);
+        let what = tamper_description(ev.dev, ev.ino, &c_str(&ev.name));
+        let now = Instant::now();
+        let id = (ev.dev, ev.ino, comm.clone());
+        if self
+            .tamper_reported
+            .get(&id)
+            .is_some_and(|t| now.duration_since(*t) < TAMPER_REPEAT)
+        {
+            debug!("tamper attempt blocked again: {what}");
+            return;
+        }
+        self.tamper_reported.insert(id, now);
+        self.send(
+            "Tamper attempt blocked",
+            format!("{what}\nby {comm} (pid {}, uid {})", ev.tgid, ev.uid),
+        )
+        .await;
+    }
+
     async fn handle_later(&mut self, later: Later) {
         match later {
             Later::Hash { path, who } => self.check_hash(&path, &who).await,
@@ -469,22 +609,5 @@ impl Monitor<'_> {
             self.by_path.insert(path.to_owned(), new);
         }
         debug!("{}: now inode {new_key:?}", path.display());
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::kernel_dev;
-
-    #[test]
-    fn kernel_dev_encoding() {
-        // makedev(253, 0) in glibc's encoding -> MKDEV(253, 0) in the kernel
-        assert_eq!(kernel_dev(0xfd00), 253 << 20);
-        // makedev(259, 3): major above 255 uses the high bits
-        let glibc = ((259u64 & 0xfff) << 8) | 3;
-        assert_eq!(kernel_dev(glibc), (259 << 20) | 3);
-        // minor above 255
-        let glibc = (8u64 << 8) | (0x123 & 0xff) | ((0x123 & !0xff) << 12);
-        assert_eq!(kernel_dev(glibc), (8 << 20) | 0x123);
     }
 }
