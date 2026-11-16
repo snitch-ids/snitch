@@ -20,9 +20,9 @@ use aya_ebpf::{
     programs::LsmContext,
 };
 use snitch_ebpf_common::{
-    Event, InodeKey, EV_CHMOD, EV_CHOWN, EV_CLOSE_WRITE, EV_CREATE, EV_LINK, EV_OPEN_WRITE,
-    EV_RENAME_FROM, EV_RENAME_OVER, EV_TRUNCATE, EV_UNLINK, NAME_LEN, STAT_DROPPED, STAT_EVENTS,
-    STAT_LEN, STAT_READ_ERRORS, WATCH_DIR, WATCH_FILE,
+    Event, InodeKey, EV_CHMOD, EV_CHOWN, EV_CLOSE_WRITE, EV_CREATE, EV_INODE_FREED, EV_LINK,
+    EV_OPEN_WRITE, EV_RENAME_FROM, EV_RENAME_OVER, EV_TRUNCATE, EV_UNLINK, NAME_LEN, STAT_DROPPED,
+    STAT_EVENTS, STAT_LEN, STAT_READ_ERRORS, WATCH_DIR, WATCH_FILE,
 };
 
 // Set by the loader from /sys/kernel/btf/vmlinux.
@@ -34,6 +34,8 @@ static OFF_FILE_F_INODE: u32 = 0;
 static OFF_INODE_I_INO: u32 = 0;
 #[no_mangle]
 static OFF_INODE_I_SB: u32 = 0;
+#[no_mangle]
+static OFF_INODE_I_NLINK: u32 = 0;
 #[no_mangle]
 static OFF_SB_S_DEV: u32 = 0;
 #[no_mangle]
@@ -261,13 +263,17 @@ unsafe fn try_path_rename(ctx: &LsmContext) -> R<()> {
     let old_dentry: *const u8 = ctx.arg(1);
     let new_dir: *const u8 = ctx.arg(2);
     let new_dentry: *const u8 = ctx.arg(3);
-    if let Some(key) = watched_dentry(old_dentry, WATCH_FILE)? {
+    let from = watched_dentry(old_dentry, WATCH_FILE)?;
+    if let Some(key) = from {
         emit(EV_RENAME_FROM, key, new_dentry);
     }
     if let Some(key) = watched_dentry(new_dentry, WATCH_FILE)? {
         emit(EV_RENAME_OVER, key, old_dentry);
-    } else if let Some(key) = watched_path(new_dir, WATCH_DIR)? {
-        emit(EV_CREATE, key, new_dentry);
+    } else if from.is_none() {
+        // A watched file moving in is already reported as renamed.
+        if let Some(key) = watched_path(new_dir, WATCH_DIR)? {
+            emit(EV_CREATE, key, new_dentry);
+        }
     }
     Ok(())
 }
@@ -329,6 +335,32 @@ unsafe fn create_event(ctx: &LsmContext) -> R<()> {
     let dentry: *const u8 = ctx.arg(1);
     if let Some(key) = watched_path(dir, WATCH_DIR)? {
         emit(EV_CREATE, key, dentry);
+    }
+    Ok(())
+}
+
+/// An inode is destroyed: evicted from the inode cache, or deleted. Only a
+/// deleted inode (no links left) gives up its inode number, which the file
+/// system may hand to the next new file; drop it from `WATCHED` so that file
+/// isn't reported under the deleted file's name.
+#[lsm(hook = "inode_free_security")]
+pub fn inode_free_security(ctx: LsmContext) -> i32 {
+    verdict(unsafe { try_inode_free(&ctx) })
+}
+
+#[inline(always)]
+unsafe fn try_inode_free(ctx: &LsmContext) -> R<()> {
+    let inode: *const u8 = ctx.arg(0);
+    let Some(key) = inode_key(inode)? else {
+        return Ok(());
+    };
+    if WATCHED.get(&key).is_none() {
+        return Ok(());
+    }
+    let nlink: u32 = read(inode, off(&OFF_INODE_I_NLINK))?;
+    if nlink == 0 {
+        let _ = WATCHED.remove(&key);
+        emit(EV_INODE_FREED, key, core::ptr::null());
     }
     Ok(())
 }

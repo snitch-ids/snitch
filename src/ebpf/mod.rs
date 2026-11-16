@@ -7,7 +7,8 @@
 //! configured directories, identified by (device, inode). This module loads
 //! them, fills their watch map, and turns their events into messages. A file
 //! that was opened for writing is hashed again when the writer closes it, and
-//! reported if the hash differs from the database.
+//! reported if the hash differs from the database. Deleted inodes leave the
+//! watch map when the kernel frees them, before their number can be reused.
 mod btf;
 
 use std::collections::HashMap as StdHashMap;
@@ -20,9 +21,9 @@ use aya::programs::Lsm;
 use aya::{Btf as AyaBtf, EbpfLoader};
 use eyre::{bail, ContextCompat, Result, WrapErr};
 use snitch_ebpf_common::{
-    Event, InodeKey, EV_CHMOD, EV_CHOWN, EV_CLOSE_WRITE, EV_CREATE, EV_LINK, EV_OPEN_WRITE,
-    EV_RENAME_FROM, EV_RENAME_OVER, EV_TRUNCATE, EV_UNLINK, STAT_DROPPED, STAT_READ_ERRORS,
-    WATCH_DIR, WATCH_FILE,
+    Event, InodeKey, EV_CHMOD, EV_CHOWN, EV_CLOSE_WRITE, EV_CREATE, EV_INODE_FREED, EV_LINK,
+    EV_OPEN_WRITE, EV_RENAME_FROM, EV_RENAME_OVER, EV_TRUNCATE, EV_UNLINK, STAT_DROPPED,
+    STAT_READ_ERRORS, WATCH_DIR, WATCH_FILE,
 };
 use tokio::io::unix::AsyncFd;
 use tokio::sync::mpsc;
@@ -48,6 +49,7 @@ const PROGRAMS: &[&str] = &[
     "path_mknod",
     "path_mkdir",
     "path_symlink",
+    "inode_free_security",
 ];
 
 /// Hash a file again this long after it was opened for writing, in case the
@@ -77,6 +79,7 @@ fn struct_offsets() -> Result<Vec<(&'static str, u32)>> {
         ("OFF_FILE_F_INODE", get("file", "f_inode", 8)?),
         ("OFF_INODE_I_INO", get("inode", "i_ino", 8)?),
         ("OFF_INODE_I_SB", get("inode", "i_sb", 8)?),
+        ("OFF_INODE_I_NLINK", get("inode", "i_nlink", 4)?),
         ("OFF_SB_S_DEV", get("super_block", "s_dev", 4)?),
         ("OFF_PATH_DENTRY", get("path", "dentry", 8)?),
         ("OFF_DENTRY_D_INODE", get("dentry", "d_inode", 8)?),
@@ -382,6 +385,14 @@ impl Monitor<'_> {
             EV_CHOWN => {
                 self.send("Owner changed", format!("{}\n{who}", path.display()))
                     .await;
+            }
+            EV_INODE_FREED => {
+                // Already out of the watch map (the programs removed it).
+                debug!("{}: inode {key:?} freed", path.display());
+                self.by_key.remove(&key);
+                if self.by_path.get(&path) == Some(&key) {
+                    self.by_path.remove(&path);
+                }
             }
             other => warn!("unknown BPF event kind {other}"),
         }

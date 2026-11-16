@@ -42,6 +42,10 @@ pub const EV_CREATE: u32 = 8;
 pub const EV_CHMOD: u32 = 9;
 /// A watched file's or directory's owner was changed.
 pub const EV_CHOWN: u32 = 10;
+/// A watched inode was deleted (its last link is gone and it is freed). The
+/// programs have already removed it from `WATCHED`, so a new file that gets
+/// the same inode number is not mistaken for it.
+pub const EV_INODE_FREED: u32 = 11;
 
 pub const NAME_LEN: usize = 64;
 
