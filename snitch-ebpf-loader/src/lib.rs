@@ -49,6 +49,7 @@ const PROTECTED_MAP_NAMES: &[&str] = &[
     "CONTROL",
     "PROTECTED",
     "PROTECTED_MAPS",
+    "TRUSTED_EXES",
 ];
 
 /// `WATCHED` size when loaded at boot, before the database is known. The map
@@ -71,18 +72,21 @@ pub const MONITOR_PROGRAMS: &[&str] = &[
     "inode_free_security",
 ];
 
-/// Self-protection: LSM programs, attached at boot only. Plus the
-/// cgroup/sysctl program `sysctl_guard`.
-pub const PROTECT_PROGRAMS: &[&str] = &[
-    "bpf",
-    "bpf_map",
-    "sb_umount",
-    "sb_mount",
-    "move_mount",
-    "sb_pivotroot",
-    "bprm_check_security",
-    "task_kill",
-    "ptrace_access_check",
+/// Self-protection: LSM programs (program, hook), attached at boot only.
+/// Plus the cgroup/sysctl program `sysctl_guard`.
+pub const PROTECT_PROGRAMS: &[(&str, &str)] = &[
+    ("bpf", "bpf"),
+    ("bpf_map", "bpf_map"),
+    ("sb_umount", "sb_umount"),
+    ("sb_mount", "sb_mount"),
+    ("move_mount", "move_mount"),
+    ("sb_pivotroot", "sb_pivotroot"),
+    ("bprm_check_security", "bprm_check_security"),
+    ("task_kill", "task_kill"),
+    ("ptrace_access_check", "ptrace_access_check"),
+    ("protect_mmap_file", "mmap_file"),
+    ("protect_file_open", "file_open"),
+    ("protect_path_truncate", "path_truncate"),
 ];
 
 /// What the self-protection programs guard.
@@ -94,6 +98,9 @@ pub struct Protect {
     pub bpffs_dev: u32,
     /// Inode number of the initial mount namespace
     pub init_mnt_ns: u32,
+    /// Exec lock for snitch.service: only the programs given to [`pin_all`]
+    /// may run there, and nobody may write to them.
+    pub exec_lock: bool,
 }
 
 pub struct LoadOptions {
@@ -122,7 +129,11 @@ pub fn struct_offsets() -> Result<Vec<(&'static str, u32)>> {
     let btf = btf::Btf::from_file(Path::new("/sys/kernel/btf/vmlinux"))
         .wrap_err("reading kernel BTF (needs CONFIG_DEBUG_INFO_BTF)")?;
     let get = |s: &str, m: &str, size: u32| -> Result<u32> {
-        let member = btf.member(s, m)?;
+        // `old|new`: a member that was renamed
+        let member = match m.split_once('|') {
+            Some((new, old)) => btf.member(s, new).or_else(|_| btf.member(s, old))?,
+            None => btf.member(s, m)?,
+        };
         if member.size != size {
             bail!(
                 "{s}.{m} has size {}, the BPF programs read {size}",
@@ -156,6 +167,27 @@ pub fn struct_offsets() -> Result<Vec<(&'static str, u32)>> {
         ("OFF_VFSMOUNT_MNT_SB", get("vfsmount", "mnt_sb", 8)?),
         ("OFF_BPRM_FILE", get("linux_binprm", "file", 8)?),
         ("OFF_BPF_MAP_ID", get("bpf_map", "id", 4)?),
+        ("OFF_BPRM_FILENAME", get("linux_binprm", "filename", 8)?),
+        (
+            "OFF_FILE_F_PATH_DENTRY",
+            get("file", "f_path", 16)? + get("path", "dentry", 8)?,
+        ),
+        ("OFF_TASK_CGROUPS", get("task_struct", "cgroups", 8)?),
+        ("OFF_CSS_SET_DFL_CGRP", get("css_set", "dfl_cgrp", 8)?),
+        ("OFF_CGROUP_KN", get("cgroup", "kn", 8)?),
+        ("OFF_KERNFS_NODE_NAME", get("kernfs_node", "name", 8)?),
+        // Renamed in 6.15
+        (
+            "OFF_KERNFS_NODE_PARENT",
+            get("kernfs_node", "__parent|parent", 8)?,
+        ),
+        ("OFF_MOUNT_MNT", btf.member("mount", "mnt")?.offset),
+        ("OFF_MOUNT_MNT_NS", get("mount", "mnt_ns", 8)?),
+        (
+            "OFF_MOUNT_MNT_MOUNTPOINT",
+            get("mount", "mnt_mountpoint", 8)?,
+        ),
+        ("OFF_DENTRY_D_PARENT", get("dentry", "d_parent", 8)?),
     ])
 }
 
@@ -171,24 +203,27 @@ pub fn load(opts: &LoadOptions) -> Result<Ebpf> {
         root_dev: 0,
         bpffs_dev: 0,
         init_mnt_ns: 0,
+        exec_lock: false,
     });
     loader.override_global("ROOT_DEV", &p.root_dev, true);
     loader.override_global("BPFFS_DEV", &p.bpffs_dev, true);
     loader.override_global("INIT_MNT_NS", &p.init_mnt_ns, true);
+    let exec_lock = p.exec_lock as u32;
+    loader.override_global("EXEC_LOCK", &exec_lock, true);
     let mut bpf = loader.load(BPF_OBJ).wrap_err("loading the BPF object")?;
 
     let btf = AyaBtf::from_sys_fs().wrap_err("reading kernel BTF")?;
-    let protect: &[&str] = if opts.protect.is_some() {
-        PROTECT_PROGRAMS
-    } else {
-        &[]
-    };
-    for name in MONITOR_PROGRAMS.iter().chain(protect) {
+    let monitor = MONITOR_PROGRAMS.iter().map(|name| (*name, *name));
+    let protect = PROTECT_PROGRAMS
+        .iter()
+        .copied()
+        .filter(|_| opts.protect.is_some());
+    for (name, hook) in monitor.chain(protect) {
         let prog: &mut Lsm = bpf
             .program_mut(name)
             .wrap_err_with(|| format!("BPF program {name} missing"))?
             .try_into()?;
-        prog.load(name, &btf)
+        prog.load(hook, &btf)
             .wrap_err_with(|| format!("loading BPF LSM program {name}"))?;
     }
     if opts.protect.is_some() {
@@ -229,7 +264,13 @@ pub fn program_count() -> usize {
 /// Boot: attach all programs from a [`load`] with `protect`, pin links and
 /// the daemon's maps under `pin_dir`, and fill the protection maps.
 /// `cgroup_root`: a cgroup2 mount, for the cgroup/sysctl program.
-pub fn pin_all(mut bpf: Ebpf, pin_dir: &Path, cgroup_root: &Path) -> Result<()> {
+/// `trusted_exes`: the programs snitch.service may run (exec lock).
+pub fn pin_all(
+    mut bpf: Ebpf,
+    pin_dir: &Path,
+    cgroup_root: &Path,
+    trusted_exes: &[InodeKey],
+) -> Result<()> {
     fs::create_dir_all(pin_dir).wrap_err_with(|| format!("creating {}", pin_dir.display()))?;
     let pin = |name: String| -> PathBuf { pin_dir.join(name) };
 
@@ -244,7 +285,8 @@ pub fn pin_all(mut bpf: Ebpf, pin_dir: &Path, cgroup_root: &Path) -> Result<()> 
         .pin(pin(SELFTEST_PIN.into()))
         .wrap_err("pinning the self-test pin")?;
 
-    for name in MONITOR_PROGRAMS.iter().chain(PROTECT_PROGRAMS) {
+    let protect = PROTECT_PROGRAMS.iter().map(|(name, _)| name);
+    for name in MONITOR_PROGRAMS.iter().chain(protect) {
         let prog: &mut Lsm = bpf.program_mut(name).unwrap().try_into()?;
         let id = prog
             .attach()
@@ -278,6 +320,12 @@ pub fn pin_all(mut bpf: Ebpf, pin_dir: &Path, cgroup_root: &Path) -> Result<()> 
 
     let mut control: Array<_, u32> = Array::try_from(bpf.map_mut("CONTROL").unwrap())?;
     control.set(CTL_ABI, ABI_VERSION, 0)?;
+
+    let mut trusted: HashMap<_, InodeKey, u32> =
+        HashMap::try_from(bpf.map_mut("TRUSTED_EXES").unwrap())?;
+    for key in trusted_exes {
+        trusted.insert(key, 1, 0)?;
+    }
 
     let mut protected: HashMap<_, InodeKey, u32> =
         HashMap::try_from(bpf.map_mut("PROTECTED").unwrap())?;

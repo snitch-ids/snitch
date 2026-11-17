@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::{env, process};
-use walkdir::DirEntry;
 mod default;
 mod macos;
 mod windows;
@@ -24,6 +23,16 @@ pub struct Config {
     /// host (needs a token); 0 turns them off.
     #[serde(default = "Config::default_heartbeat_interval")]
     pub heartbeat_interval: u64,
+    /// Where the configuration came from (reported in heartbeats).
+    #[serde(skip)]
+    pub origin: Option<ConfigOrigin>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConfigOrigin {
+    pub path: PathBuf,
+    /// SHA-256 of the file (lower-case hex)
+    pub sha256: String,
 }
 
 impl Config {
@@ -53,16 +62,6 @@ impl Config {
         database_path
     }
 
-    pub fn clear_database(&self) {
-        if self.database_path().exists() {
-            info!(
-                "database already found at: {:?}. Deleting.",
-                &self.database_path()
-            );
-            std::fs::remove_dir_all(self.database_path()).expect("Failed deleting database.");
-        }
-    }
-
     /// get directories as a vector of Paths. Non-existent directories will be ignored with a warning.
     pub fn directories(&self) -> Vec<&Path> {
         let paths = self
@@ -72,15 +71,6 @@ impl Config {
             .filter(|dir| check_directory_exists(dir))
             .collect();
         paths
-    }
-
-    /// Filters excluded paths such as the database path of snitch
-    pub fn is_excluded_directory(&self, directory: &DirEntry) -> bool {
-        directory
-            .path()
-            .parent()
-            .expect("failed getting parent directory")
-            == self.database_path()
     }
 
     /// get a basic configuration for demonstration. On Ubuntu and Debian this should be a good starting point.
@@ -107,10 +97,15 @@ pub fn load_config_from_file(path: &Path) -> Result<Config> {
         println!("No config file: {:?}\nTip: run\n\n  snitch --demo-config > /etc/snitch/config.yaml\n\nto get started.", path);
         process::exit(1);
     }
-    let reader = std::fs::File::open(path)
+    let bytes = std::fs::read(path)
         .wrap_err(format!("Failed opening config file {:?}", path.to_owned()))?;
 
-    let config = serde_yaml::from_reader(reader)?;
+    let mut config: Config = serde_yaml::from_slice(&bytes)?;
+    config.origin = Some(ConfigOrigin {
+        path: std::path::absolute(path).unwrap_or_else(|_| path.to_owned()),
+        sha256: data_encoding::HEXLOWER
+            .encode(ring::digest::digest(&ring::digest::SHA256, &bytes).as_ref()),
+    });
 
     Ok(config)
 }

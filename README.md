@@ -136,7 +136,9 @@ Started like this, snitch loads the programs itself, and they stay attached
 while it runs. On a device, load them at boot instead, from an initramfs
 bundled into the kernel (the Yocto layer meta-snitch does this):
 ```
-snitch-ebpf-load --root /rootfs --cgroup /sys/fs/cgroup
+snitch-ebpf-load --root /rootfs --cgroup /sys/fs/cgroup \
+  --trusted-exe /rootfs/usr/bin/snitch \
+  --trusted-exe /rootfs/usr/lib/systemd/systemd-executor
 ```
 `snitch-ebpf-load` (in `snitch-ebpf-loader/`) attaches the monitoring
 programs plus self-protection, and pins them in `/sys/fs/bpf/snitch`. Then
@@ -147,6 +149,27 @@ ptrace init. Refused attempts are reported as "Tamper attempt blocked". Run
 it as a systemd `Type=notify` service with `FileDescriptorStoreMax=8` and
 `FileDescriptorStorePreserve=yes`: snitch keeps the map fds in systemd's fd
 store and gets them back from there after a restart.
+
+systemd hands those fds to whatever `snitch.service` starts. With
+`--trusted-exe`, the exec lock keeps a unit drop-in from running anything
+else there:
+- only the given programs (as found at boot) may run in the unit
+- nobody may open them for writing
+- once snitch has claimed its maps, executable mappings in the unit must
+  come from files in the hash database (no `LD_PRELOAD` from `/tmp`)
+
+`--watch-ebpf` compares every file with the database when it starts, and
+reports the ones that changed or disappeared while it wasn't watching. Each
+start reports them again until you accept the change:
+```
+snitch --accept /etc/issue
+```
+
+To build the database for an image, hash its root file system as if it were
+`/`. The database goes below it too:
+```
+snitch --init --root /path/to/rootfs --config /path/to/rootfs/etc/snitch/config.yaml
+```
 
 `--watch-ebpf` tests itself every minute. It writes a canary file
 (`/run/snitch/canary`) and expects the BPF programs to report it. With the
@@ -159,10 +182,12 @@ Heartbeats
 
 With a backend token, `--watch-ebpf` and `--watch-files` send a heartbeat
 every `heartbeat_interval` seconds (config, default 60; 0 turns them off).
-The heartbeat carries the boot id, the monitoring mode and the self-test
-result. The backend alerts when:
+The heartbeat carries the boot id, the monitoring mode, the self-test
+result, the number of watched files, and the path and SHA-256 of the
+configuration file. The backend alerts when:
 - heartbeats stop, and when they come back
 - snitch restarts, or the host reboots
+- snitch restarts with another configuration file
 - a heartbeat is forged or replayed
 
 Each snitch process signs its heartbeats with a random key of its own

@@ -19,5 +19,6 @@ pub fn get_config() -> Config {
         url: Config::default_url(),
         token: "SDFOIJSDFOIJSDFOIJ".to_string(),
         heartbeat_interval: Config::default_heartbeat_interval(),
+        origin: None,
     }
 }

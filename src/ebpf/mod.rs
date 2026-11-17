@@ -18,10 +18,15 @@
 //!   Refused tamper attempts are reported.
 //! - Fallback (no pins): load and attach the monitoring programs here. They
 //!   stay attached while this process runs.
+//!
+//! At every start, a background task hashes all files from the database and
+//! reports the ones that changed or disappeared while snitch wasn't watching
+//! (powered off, stopped, or before the first boot of an image whose
+//! database was built with it).
 
 mod selftest;
 
-use std::collections::HashMap as StdHashMap;
+use std::collections::{HashMap as StdHashMap, HashSet};
 use std::os::fd::{AsFd, FromRawFd, OwnedFd};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -33,9 +38,9 @@ use snitch_ebpf_common::{
     Event, InodeKey, ABI_VERSION, CTL_ABI, CTL_DAEMON_TGID, CTL_LOCKED, EV_CHMOD, EV_CHOWN,
     EV_CLOSE_WRITE, EV_CREATE, EV_INODE_FREED, EV_LINK, EV_OPEN_WRITE, EV_RENAME_FROM,
     EV_RENAME_OVER, EV_TAMPER, EV_TRUNCATE, EV_UNLINK, STAT_DROPPED, STAT_READ_ERRORS,
-    TAMPER_BPF_CMD, TAMPER_KILL, TAMPER_MAP_FD, TAMPER_MOVE_MOUNT, TAMPER_PIN_RENAME,
-    TAMPER_PIN_UNLINK, TAMPER_PIVOT_ROOT, TAMPER_PTRACE, TAMPER_SYSCTL, TAMPER_UMOUNT, WATCH_DIR,
-    WATCH_FILE,
+    TAMPER_BPF_CMD, TAMPER_EXEC, TAMPER_EXEC_MMAP, TAMPER_EXE_WRITE, TAMPER_KILL, TAMPER_MAP_FD,
+    TAMPER_MOVE_MOUNT, TAMPER_PIN_RENAME, TAMPER_PIN_UNLINK, TAMPER_PIVOT_ROOT, TAMPER_PTRACE,
+    TAMPER_SYSCTL, TAMPER_UMOUNT, WATCH_DIR, WATCH_FILE,
 };
 use snitch_ebpf_loader::{inode_key, LoadOptions, DAEMON_MAPS, PIN_DIR};
 use tokio::io::unix::AsyncFd;
@@ -44,7 +49,7 @@ use walkdir::WalkDir;
 
 use crate::config::Config;
 use crate::dispatcher::{MessageBackend, SnitchDispatcher};
-use crate::hashing::hash_file;
+use crate::hashing::{hash_file, hash_file_sync};
 use crate::heartbeat::{self, Mode, SharedHealth};
 use crate::persist::open_database;
 
@@ -98,6 +103,40 @@ enum Later {
     Hash { path: PathBuf, who: String },
     /// The path may point to another inode now: update the watch map.
     Resync(PathBuf),
+    /// The startup check found the file missing.
+    Missing(PathBuf),
+}
+
+/// Who changed a file that the startup check found changed.
+const NOT_WATCHING: &str = "while snitch wasn't watching";
+
+/// Hash every file from the database in a blocking thread; send the ones
+/// that differ (hashed again and reported by the monitor) or are gone.
+fn check_baseline(baseline: Vec<(PathBuf, String)>, later: mpsc::UnboundedSender<Later>) {
+    tokio::task::spawn_blocking(move || {
+        let start = Instant::now();
+        let (mut changed, mut missing) = (0, 0);
+        let total = baseline.len();
+        for (path, expected) in baseline {
+            match hash_file_sync(&path) {
+                Ok(hash) if hash == expected => {}
+                Ok(_) => {
+                    changed += 1;
+                    let who = NOT_WATCHING.to_string();
+                    let _ = later.send(Later::Hash { path, who });
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                    missing += 1;
+                    let _ = later.send(Later::Missing(path));
+                }
+                Err(err) => debug!("startup check: {}: {err}", path.display()),
+            }
+        }
+        info!(
+            "startup check: {total} files hashed in {:.1} s, {changed} changed, {missing} missing",
+            start.elapsed().as_secs_f64()
+        );
+    });
 }
 
 struct Monitor<'a> {
@@ -108,6 +147,9 @@ struct Monitor<'a> {
     baseline: StdHashMap<PathBuf, String>,
     /// Last mismatching hash reported per file, to report each change once.
     reported: StdHashMap<PathBuf, String>,
+    /// Files reported removed (an unlink while snitch was stopped is also
+    /// found missing by the startup check).
+    removed: HashSet<PathBuf>,
     /// When each kind of tamper attempt was last reported.
     tamper_reported: StdHashMap<(u64, u64, String), Instant>,
     later: mpsc::UnboundedSender<Later>,
@@ -327,6 +369,13 @@ pub async fn watch_ebpf(config: &Config, dispatcher: &SnitchDispatcher) -> Resul
     } else {
         Mode::Unprotected
     };
+    check_baseline(
+        baseline
+            .iter()
+            .map(|(p, h)| (p.clone(), h.clone()))
+            .collect(),
+        later_tx.clone(),
+    );
     let mut monitor = Monitor {
         dispatcher,
         map,
@@ -334,11 +383,13 @@ pub async fn watch_ebpf(config: &Config, dispatcher: &SnitchDispatcher) -> Resul
         by_path,
         baseline,
         reported: StdHashMap::new(),
+        removed: HashSet::new(),
         tamper_reported: StdHashMap::new(),
         later: later_tx,
         selftest,
         health: heartbeat::start(config, mode),
     };
+    monitor.health.lock().unwrap().watched = Some(n_files as u64);
     if std::env::var_os("NOTIFY_SOCKET").is_some() {
         let _ = sd_notify::notify(&[sd_notify::NotifyState::Ready]);
     }
@@ -436,6 +487,21 @@ fn tamper_description(what: u64, detail: u64, name: &str) -> String {
                 format!("snitch (pid {detail})")
             }
         ),
+        TAMPER_EXEC => format!(
+            "running {name} in snitch.service (would get snitch's BPF map fds; a unit drop-in?)"
+        ),
+        TAMPER_EXE_WRITE => format!(
+            "{} {name}, which snitch.service may run",
+            if detail == 1 {
+                "truncating"
+            } else {
+                "opening for writing"
+            }
+        ),
+        TAMPER_EXEC_MMAP => format!(
+            "loading {name} as code into snitch.service: it isn't in the hash database \
+             (LD_PRELOAD or the like?)"
+        ),
         _ => format!("unknown kind {what}"),
     }
 }
@@ -498,6 +564,7 @@ impl Monitor<'_> {
             EV_CLOSE_WRITE => self.check_hash(&path, &who).await,
             EV_TRUNCATE => self.after(AFTER_OPERATION, Later::Hash { path, who }),
             EV_UNLINK => {
+                self.removed.insert(path.clone());
                 self.send("File removed", format!("{}\n{who}", path.display()))
                     .await;
                 self.after(AFTER_OPERATION, Later::Resync(path));
@@ -615,6 +682,15 @@ impl Monitor<'_> {
         match later {
             Later::Hash { path, who } => self.check_hash(&path, &who).await,
             Later::Resync(path) => self.resync(&path),
+            Later::Missing(path) => {
+                if self.removed.insert(path.clone()) {
+                    self.send(
+                        "File removed",
+                        format!("{}\n{NOT_WATCHING}", path.display()),
+                    )
+                    .await
+                }
+            }
         }
     }
 

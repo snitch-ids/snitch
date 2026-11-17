@@ -58,6 +58,9 @@ pub struct Health {
     pub events_dropped: u64,
     /// Refused tamper attempts.
     pub tamper_blocked: u64,
+    /// Files from the hash database that are watched (BPF modes).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub watched: Option<u64>,
 }
 
 pub type SharedHealth = Arc<Mutex<Health>>;
@@ -71,6 +74,12 @@ struct Heartbeat<'a> {
     interval: u64,
     sent_at: DateTime<Utc>,
     version: &'static str,
+    /// SHA-256 of the configuration file and its path: a restart with
+    /// another configuration (e.g. one that watches nothing) is reported.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    config: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    config_path: Option<&'a str>,
     #[serde(flatten)]
     health: Health,
     /// Until the backend has accepted a heartbeat of this session.
@@ -86,6 +95,7 @@ pub fn start(config: &Config, mode: Mode) -> SharedHealth {
         selftest: None,
         events_dropped: 0,
         tamper_blocked: 0,
+        watched: None,
     }));
     if config.token.is_empty() {
         return health;
@@ -116,6 +126,7 @@ struct Sender {
     seq: u64,
     registered: bool,
     failing: bool,
+    config: Option<(String, String)>,
 }
 
 impl Sender {
@@ -144,6 +155,10 @@ impl Sender {
             seq: 0,
             registered: false,
             failing: false,
+            config: config
+                .origin
+                .as_ref()
+                .map(|o| (o.sha256.clone(), o.path.display().to_string())),
         })
     }
 
@@ -174,6 +189,8 @@ impl Sender {
             interval: self.interval,
             sent_at: Utc::now(),
             version: env!("CARGO_PKG_VERSION"),
+            config: self.config.as_ref().map(|(sha, _)| sha.as_str()),
+            config_path: self.config.as_ref().map(|(_, path)| path.as_str()),
             health: health.clone(),
             key: (!self.registered).then_some(self.key_hex.as_str()),
         })

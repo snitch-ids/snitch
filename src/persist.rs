@@ -113,6 +113,30 @@ pub async fn validate_hashes(
     Ok(())
 }
 
+/// Store the current hashes of `paths` in the database; forget the ones that
+/// don't exist.
+pub async fn accept_files(config: &Config, paths: &[String]) -> eyre::Result<()> {
+    let db = open_database(&config.database_path())?;
+    for path in paths {
+        if !Path::new(path).is_absolute() {
+            eyre::bail!("{path}: needs an absolute path");
+        }
+        match hashing::hash_file(Path::new(path)).await {
+            Ok(hash) => {
+                db.insert(path.as_str(), hash.as_str())?;
+                info!("{path}: accepted");
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                db.remove(path.as_str())?;
+                info!("{path}: doesn't exist, removed from the database");
+            }
+            Err(err) => warn!("{path}: {err}, not accepted"),
+        }
+    }
+    db.flush()?;
+    Ok(())
+}
+
 async fn validate_hash(fp: &Path, former_hash: &str) -> Result<(), HashMismatch> {
     if !fp.exists() {
         warn!("the file does not exist anymore! {:?}", fp)

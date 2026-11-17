@@ -4,15 +4,21 @@
 //! switch_root, so the programs (including self-protection) are in place
 //! before any program from the root file system runs.
 //!
-//! usage: snitch-ebpf-load --root DIR --cgroup DIR [--pin-dir DIR] [--max-watched N]
+//! usage: snitch-ebpf-load --root DIR --cgroup DIR [--trusted-exe PATH]...
+//!                         [--pin-dir DIR] [--max-watched N]
 //!
-//!   --root DIR      mount point of the root file system (protected from
-//!                   unmounting; init executing from it arms the mount rules)
-//!   --cgroup DIR    a cgroup2 mount, for attaching the sysctl guard to the
-//!                   root cgroup
-//!   --pin-dir DIR   where to pin (default /sys/fs/bpf/snitch; its parent must
-//!                   be a bpffs mount)
-//!   --max-watched N size of the watch map (default 131072)
+//!   --root DIR         mount point of the root file system (protected from
+//!                      unmounting; init executing from it arms the mount
+//!                      rules)
+//!   --cgroup DIR       a cgroup2 mount, for attaching the sysctl guard to the
+//!                      root cgroup
+//!   --trusted-exe PATH a program snitch.service may execute (the snitch
+//!                      binary, systemd-executor), under --root. With at
+//!                      least one, the exec lock is on: nothing else runs in
+//!                      snitch.service, and nobody may write to these.
+//!   --pin-dir DIR      where to pin (default /sys/fs/bpf/snitch; its parent
+//!                      must be a bpffs mount)
+//!   --max-watched N    size of the watch map (default 131072)
 use std::ffi::CString;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
@@ -21,7 +27,8 @@ use std::process::ExitCode;
 
 use eyre::{bail, ContextCompat, Result, WrapErr};
 use snitch_ebpf_loader::{
-    kernel_dev, load, pin_all, program_count, LoadOptions, Protect, DEFAULT_MAX_WATCHED, PIN_DIR,
+    inode_key, kernel_dev, load, pin_all, program_count, LoadOptions, Protect, DEFAULT_MAX_WATCHED,
+    PIN_DIR,
 };
 
 const BPF_FS_MAGIC: i64 = 0xcafe_4a11;
@@ -29,6 +36,7 @@ const BPF_FS_MAGIC: i64 = 0xcafe_4a11;
 struct Args {
     root: PathBuf,
     cgroup: PathBuf,
+    trusted_exes: Vec<PathBuf>,
     pin_dir: PathBuf,
     max_watched: u32,
 }
@@ -36,6 +44,7 @@ struct Args {
 fn parse_args() -> Result<Args> {
     let mut root = None;
     let mut cgroup = None;
+    let mut trusted_exes = Vec::new();
     let mut pin_dir = PathBuf::from(PIN_DIR);
     let mut max_watched = DEFAULT_MAX_WATCHED;
     let mut args = std::env::args().skip(1);
@@ -44,19 +53,21 @@ fn parse_args() -> Result<Args> {
         match arg.as_str() {
             "--root" => root = Some(PathBuf::from(value()?)),
             "--cgroup" => cgroup = Some(PathBuf::from(value()?)),
+            "--trusted-exe" => trusted_exes.push(PathBuf::from(value()?)),
             "--pin-dir" => pin_dir = PathBuf::from(value()?),
             "--max-watched" => {
                 max_watched = value()?.parse().wrap_err("--max-watched")?;
             }
             _ => bail!(
                 "unknown argument {arg}\nusage: snitch-ebpf-load --root DIR --cgroup DIR \
-                 [--pin-dir DIR] [--max-watched N]"
+                 [--trusted-exe PATH]... [--pin-dir DIR] [--max-watched N]"
             ),
         }
     }
     Ok(Args {
         root: root.wrap_err("--root is required")?,
         cgroup: cgroup.wrap_err("--cgroup is required")?,
+        trusted_exes,
         pin_dir,
         max_watched,
     })
@@ -94,23 +105,38 @@ fn run() -> Result<()> {
     if args.pin_dir.exists() {
         bail!("{} exists: already loaded", args.pin_dir.display());
     }
+    // A missing program (e.g. an older systemd without systemd-executor) is
+    // left out; snitch.service then can't run it.
+    let mut trusted = Vec::new();
+    for path in &args.trusted_exes {
+        match std::fs::metadata(path) {
+            Ok(md) if md.is_file() => trusted.push(inode_key(&md)),
+            Ok(_) => eprintln!("{} is not a file, not trusted", path.display()),
+            Err(err) => eprintln!("{}: {err}, not trusted", path.display()),
+        }
+    }
     let protect = Protect {
         root_dev: dev_of(&args.root)?,
         bpffs_dev: dev_of(bpffs)?,
         init_mnt_ns: std::fs::metadata("/proc/self/ns/mnt")
             .wrap_err("stat /proc/self/ns/mnt")?
             .ino() as u32,
+        exec_lock: !trusted.is_empty(),
     };
     let bpf = load(&LoadOptions {
         max_watched: args.max_watched,
         protect: Some(protect),
     })?;
-    pin_all(bpf, &args.pin_dir, &args.cgroup)?;
+    pin_all(bpf, &args.pin_dir, &args.cgroup, &trusted)?;
     println!(
-        "{} BPF programs attached, pinned in {} (watch map: {} entries)",
+        "{} BPF programs attached, pinned in {} (watch map: {} entries, exec lock: {})",
         program_count(),
         args.pin_dir.display(),
-        args.max_watched
+        args.max_watched,
+        match trusted.len() {
+            0 => "off".to_string(),
+            n => format!("{n} programs"),
+        }
     );
     Ok(())
 }

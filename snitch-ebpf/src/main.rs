@@ -7,7 +7,9 @@
 //!
 //! Self-protection (refuses, see "Self-protection" below): attached by
 //! `snitch-ebpf-load` from the initramfs, keeps root from detaching the
-//! programs, removing their pins, or blinding the daemon.
+//! programs, removing their pins, or blinding the daemon. The exec lock keeps
+//! anything but snitch from running in snitch.service, which systemd hands
+//! the daemon's map fds.
 //!
 //! Rust can't emit CO-RE relocations yet, so the struct member offsets are
 //! read-only globals that the loader sets from the running kernel's BTF
@@ -29,9 +31,10 @@ use snitch_ebpf_common::{
     Event, InodeKey, CTL_ARMED, CTL_DAEMON_TGID, CTL_LEN, CTL_LOCKED, EV_CHMOD, EV_CHOWN,
     EV_CLOSE_WRITE, EV_CREATE, EV_INODE_FREED, EV_LINK, EV_OPEN_WRITE, EV_RENAME_FROM,
     EV_RENAME_OVER, EV_TAMPER, EV_TRUNCATE, EV_UNLINK, NAME_LEN, STAT_DENIED, STAT_DROPPED,
-    STAT_EVENTS, STAT_LEN, STAT_READ_ERRORS, TAMPER_BPF_CMD, TAMPER_KILL, TAMPER_MAP_FD,
-    TAMPER_MOVE_MOUNT, TAMPER_PIN_RENAME, TAMPER_PIN_UNLINK, TAMPER_PIVOT_ROOT, TAMPER_PTRACE,
-    TAMPER_SYSCTL, TAMPER_UMOUNT, WATCH_DIR, WATCH_FILE,
+    STAT_EVENTS, STAT_LEN, STAT_READ_ERRORS, TAMPER_BPF_CMD, TAMPER_EXEC, TAMPER_EXEC_MMAP,
+    TAMPER_EXE_WRITE, TAMPER_KILL, TAMPER_MAP_FD, TAMPER_MOVE_MOUNT, TAMPER_PIN_RENAME,
+    TAMPER_PIN_UNLINK, TAMPER_PIVOT_ROOT, TAMPER_PTRACE, TAMPER_SYSCTL, TAMPER_UMOUNT, WATCH_DIR,
+    WATCH_FILE,
 };
 
 // Set by the loader from /sys/kernel/btf/vmlinux.
@@ -73,6 +76,31 @@ static OFF_PATH_MNT: u32 = 0;
 static OFF_BPRM_FILE: u32 = 0;
 #[no_mangle]
 static OFF_BPF_MAP_ID: u32 = 0;
+#[no_mangle]
+static OFF_BPRM_FILENAME: u32 = 0;
+/// `file.f_path.dentry`
+#[no_mangle]
+static OFF_FILE_F_PATH_DENTRY: u32 = 0;
+#[no_mangle]
+static OFF_TASK_CGROUPS: u32 = 0;
+#[no_mangle]
+static OFF_CSS_SET_DFL_CGRP: u32 = 0;
+#[no_mangle]
+static OFF_CGROUP_KN: u32 = 0;
+#[no_mangle]
+static OFF_KERNFS_NODE_NAME: u32 = 0;
+/// `kernfs_node.__parent` (`parent` before 6.15)
+#[no_mangle]
+static OFF_KERNFS_NODE_PARENT: u32 = 0;
+/// `mount.mnt` (the `vfsmount` inside `struct mount`)
+#[no_mangle]
+static OFF_MOUNT_MNT: u32 = 0;
+#[no_mangle]
+static OFF_MOUNT_MNT_NS: u32 = 0;
+#[no_mangle]
+static OFF_MOUNT_MNT_MOUNTPOINT: u32 = 0;
+#[no_mangle]
+static OFF_DENTRY_D_PARENT: u32 = 0;
 
 // Set by snitch-ebpf-load (boot): what to protect.
 /// Kernel dev_t of the root file system
@@ -84,6 +112,9 @@ static BPFFS_DEV: u32 = 0;
 /// Inode number of the initial mount namespace
 #[no_mangle]
 static INIT_MNT_NS: u32 = 0;
+/// Non-zero: the exec lock is on (`TRUSTED_EXES` holds the snitch binary).
+#[no_mangle]
+static EXEC_LOCK: u32 = 0;
 
 /// Resized by the loader. No preallocation: the boot loader sizes it
 /// generously before the database is known.
@@ -98,6 +129,12 @@ static PROTECTED: HashMap<InodeKey, u32> = HashMap::with_max_entries(64, 0);
 #[map]
 static PROTECTED_MAPS: HashMap<u32, u32> = HashMap::with_max_entries(16, 0);
 
+/// The programs snitch.service may execute (the snitch binary, systemd's
+/// executor), as found at boot. Nobody may write to them. Filled by the boot
+/// loader.
+#[map]
+static TRUSTED_EXES: HashMap<InodeKey, u32> = HashMap::with_max_entries(8, 0);
+
 /// See `CTL_*`.
 #[map]
 static CONTROL: Array<u32> = Array::with_max_entries(CTL_LEN, 0);
@@ -111,6 +148,10 @@ static STATS: PerCpuArray<u64> = PerCpuArray::with_max_entries(STAT_LEN, 0);
 const FMODE_WRITE: u32 = 0x2;
 const BPF_F_NO_PREALLOC: u32 = 1;
 const EPERM: i32 = 1;
+const PROT_EXEC: u64 = 0x4;
+/// How far up the cgroup tree to look for snitch.service (DelegateSubgroup=
+/// and the like put processes below it).
+const CGROUP_DEPTH: usize = 8;
 
 type R<T> = Result<T, i64>;
 
@@ -175,6 +216,19 @@ unsafe fn watched_path(path: *const u8, flags: u32) -> R<Option<InodeKey>> {
 /// or null.
 #[inline(always)]
 unsafe fn emit(kind: u32, key: InodeKey, name_of: *const u8) {
+    let mut name = core::ptr::null();
+    if !name_of.is_null() {
+        match read::<*const u8>(name_of, off(&OFF_DENTRY_D_NAME_NAME)) {
+            Ok(n) => name = n,
+            Err(_) => bump(STAT_READ_ERRORS),
+        }
+    }
+    emit_str(kind, key, name);
+}
+
+/// Send an event for `key` with the kernel string `name` (or null).
+#[inline(always)]
+unsafe fn emit_str(kind: u32, key: InodeKey, name: *const u8) {
     let pid_tgid = bpf_get_current_pid_tgid();
     let mut ev = Event {
         kind,
@@ -186,13 +240,8 @@ unsafe fn emit(kind: u32, key: InodeKey, name_of: *const u8) {
         comm: bpf_get_current_comm().unwrap_or([0u8; 16]),
         name: [0u8; NAME_LEN],
     };
-    if !name_of.is_null() {
-        match read::<*const u8>(name_of, off(&OFF_DENTRY_D_NAME_NAME)) {
-            Ok(name) => {
-                let _ = bpf_probe_read_kernel_str_bytes(name, &mut ev.name);
-            }
-            Err(_) => bump(STAT_READ_ERRORS),
-        }
+    if !name.is_null() {
+        let _ = bpf_probe_read_kernel_str_bytes(name, &mut ev.name);
     }
     match EVENTS.output::<Event>(&ev, 0) {
         Ok(()) => bump(STAT_EVENTS),
@@ -222,7 +271,8 @@ fn guarded(r: R<i32>) -> i32 {
     }
 }
 
-/// Refuse a tamper attempt: count it, report it, return -EPERM.
+/// Refuse a tamper attempt: count it, report it, return -EPERM. `name_of`:
+/// dentry whose name goes into the report, or null.
 #[inline(always)]
 unsafe fn tamper(what: u64, detail: u64, name_of: *const u8) -> i32 {
     bump(STAT_DENIED);
@@ -233,6 +283,21 @@ unsafe fn tamper(what: u64, detail: u64, name_of: *const u8) -> i32 {
             ino: detail,
         },
         name_of,
+    );
+    -EPERM
+}
+
+/// Like `tamper`, with a kernel string for the name.
+#[inline(always)]
+unsafe fn tamper_str(what: u64, detail: u64, name: *const u8) -> i32 {
+    bump(STAT_DENIED);
+    emit_str(
+        EV_TAMPER,
+        InodeKey {
+            dev: what,
+            ino: detail,
+        },
+        name,
     );
     -EPERM
 }
@@ -517,20 +582,44 @@ unsafe fn in_init_mnt_ns() -> R<bool> {
     Ok(inum == init)
 }
 
-/// `s_magic` of `sb` if unmounting or moving it would release snitch's pins:
-/// snitch's bpffs, or a file system above it (sysfs, the root file system).
-/// Detaching a parent lazily takes the bpffs mount with it.
+/// `s_magic` of the mount's file system if unmounting or moving it would
+/// release snitch's pins: snitch's bpffs, or a mount above it (sysfs, the
+/// root file system at /). Detaching a parent lazily takes the bpffs mount
+/// with it. Other mounts of the root file system (bind mounts) don't hold
+/// the pins and stay allowed.
 #[inline(always)]
-unsafe fn protected_sb(sb: *const u8) -> R<Option<u64>> {
+unsafe fn protected_mount(vfsmnt: *const u8) -> R<Option<u64>> {
+    let sb: *const u8 = read(vfsmnt, off(&OFF_VFSMOUNT_MNT_SB))?;
     let dev: u32 = read(sb, off(&OFF_SB_S_DEV))?;
     let magic: u64 = read(sb, off(&OFF_SB_S_MAGIC))?;
     let bpffs = cfg(&BPFFS_DEV);
     let root = cfg(&ROOT_DEV);
-    if (bpffs != 0 && dev == bpffs) || (root != 0 && dev == root) || magic == SYSFS_MAGIC {
-        Ok(Some(magic))
-    } else {
-        Ok(None)
+    if (bpffs != 0 && dev == bpffs) || magic == SYSFS_MAGIC {
+        return Ok(Some(magic));
     }
+    if root != 0 && dev == root && is_root_mount(vfsmnt)? {
+        return Ok(Some(magic));
+    }
+    Ok(None)
+}
+
+/// Whether `vfsmnt` is mounted on a root dentry in the initial mount
+/// namespace: the root file system at /, which switch_root moved on top of
+/// the initramfs. (A detached `open_tree()` clone is in its own namespace.)
+#[inline(always)]
+unsafe fn is_root_mount(vfsmnt: *const u8) -> R<bool> {
+    let mount = vfsmnt.wrapping_sub(off(&OFF_MOUNT_MNT));
+    let ns: *const u8 = read(mount, off(&OFF_MOUNT_MNT_NS))?;
+    if ns.is_null() {
+        return Ok(false);
+    }
+    let inum: u32 = read(ns, off(&OFF_MNT_NS_INUM))?;
+    if inum != cfg(&INIT_MNT_NS) {
+        return Ok(false);
+    }
+    let mountpoint: *const u8 = read(mount, off(&OFF_MOUNT_MNT_MOUNTPOINT))?;
+    let parent: *const u8 = read(mountpoint, off(&OFF_DENTRY_D_PARENT))?;
+    Ok(parent == mountpoint)
 }
 
 /// `bpf(cmd, attr, size, kernel)`: refuse detaching or replacing links. With
@@ -593,8 +682,7 @@ unsafe fn try_sb_umount(ctx: &LsmContext) -> R<i32> {
         return Ok(0);
     }
     let mnt: *const u8 = ctx.arg(0);
-    let sb: *const u8 = read(mnt, off(&OFF_VFSMOUNT_MNT_SB))?;
-    if let Some(magic) = protected_sb(sb)? {
+    if let Some(magic) = protected_mount(mnt)? {
         return Ok(tamper(TAMPER_UMOUNT, magic, core::ptr::null()));
     }
     Ok(0)
@@ -639,8 +727,7 @@ unsafe fn try_move_mount(ctx: &LsmContext) -> R<i32> {
     }
     let from: *const u8 = ctx.arg(0);
     let mnt: *const u8 = read(from, off(&OFF_PATH_MNT))?;
-    let sb: *const u8 = read(mnt, off(&OFF_VFSMOUNT_MNT_SB))?;
-    if protected_sb(sb)?.is_some() {
+    if protected_mount(mnt)?.is_some() {
         return Ok(tamper(TAMPER_MOVE_MOUNT, 0, core::ptr::null()));
     }
     Ok(0)
@@ -664,16 +751,164 @@ unsafe fn try_sb_pivotroot() -> R<i32> {
     Ok(tamper(TAMPER_PIVOT_ROOT, 0, core::ptr::null()))
 }
 
-/// `bprm_check_security(bprm)`: arms the mount rules when init (pid 1)
-/// executes a program from the root file system, i.e. after switch_root.
-/// Never refuses.
+/// `bprm_check_security(bprm)`:
+/// - arms the mount rules when init (pid 1) executes a program from the root
+///   file system, i.e. after switch_root
+/// - exec lock: in snitch.service, only the programs in `TRUSTED_EXES` may
+///   run. systemd hands the daemon's map fds to whatever the unit starts, so
+///   a drop-in with another `ExecStart=` (or `ExecStartPre=`, ...) would get
+///   them.
 #[lsm(hook = "bprm_check_security")]
 pub fn bprm_check_security(ctx: LsmContext) -> i32 {
     let prev: i32 = ctx.arg(1);
     if prev != 0 {
         return prev;
     }
-    verdict(unsafe { try_arm(&ctx) })
+    verdict(unsafe { try_arm(&ctx) });
+    guarded(unsafe { try_exec_lock(&ctx) })
+}
+
+#[inline(always)]
+unsafe fn try_exec_lock(ctx: &LsmContext) -> R<i32> {
+    if cfg(&EXEC_LOCK) == 0 || !in_snitch_cgroup()? {
+        return Ok(0);
+    }
+    let bprm: *const u8 = ctx.arg(0);
+    let file: *const u8 = read(bprm, off(&OFF_BPRM_FILE))?;
+    let inode: *const u8 = read(file, off(&OFF_FILE_F_INODE))?;
+    if let Some(key) = inode_key(inode)? {
+        if TRUSTED_EXES.get(&key).is_some() {
+            return Ok(0);
+        }
+    }
+    let filename: *const u8 = read(bprm, off(&OFF_BPRM_FILENAME))?;
+    Ok(tamper_str(TAMPER_EXEC, 0, filename))
+}
+
+/// Whether the current task is in snitch.service's cgroup or below it.
+#[inline(always)]
+unsafe fn in_snitch_cgroup() -> R<bool> {
+    // Compared as words: a byte compare can turn into a memcmp call.
+    const WANT: [u64; 2] = [
+        u64::from_ne_bytes(*b"snitch.s"),
+        u64::from_ne_bytes(*b"ervice\0\0"),
+    ];
+    let task = bpf_get_current_task() as *const u8;
+    let cgroups: *const u8 = read(task, off(&OFF_TASK_CGROUPS))?;
+    let cgrp: *const u8 = read(cgroups, off(&OFF_CSS_SET_DFL_CGRP))?;
+    let mut kn: *const u8 = read(cgrp, off(&OFF_CGROUP_KN))?;
+    for _ in 0..CGROUP_DEPTH {
+        if kn.is_null() {
+            break;
+        }
+        let name: *const u8 = read(kn, off(&OFF_KERNFS_NODE_NAME))?;
+        // At most 15 bytes and the NUL: a longer name doesn't match.
+        let mut buf = [0u64; 2];
+        let bytes = core::slice::from_raw_parts_mut(buf.as_mut_ptr() as *mut u8, 16);
+        if bpf_probe_read_kernel_str_bytes(name, bytes).is_ok()
+            && buf[0] == WANT[0]
+            && buf[1] == WANT[1]
+        {
+            return Ok(true);
+        }
+        kn = read(kn, off(&OFF_KERNFS_NODE_PARENT))?;
+    }
+    Ok(false)
+}
+
+/// `mmap_file(file, reqprot, prot, flags)`: once the daemon holds its maps,
+/// executable mappings in snitch.service must come from files in the hash
+/// database (watched, so changes to them are reported) or `TRUSTED_EXES`.
+/// Code from anywhere else (`LD_PRELOAD`, `LD_LIBRARY_PATH`,
+/// /etc/ld.so.preload pointing at /tmp or /var) would run with the map fds.
+#[lsm(hook = "mmap_file")]
+pub fn protect_mmap_file(ctx: LsmContext) -> i32 {
+    let prev: i32 = ctx.arg(4);
+    if prev != 0 {
+        return prev;
+    }
+    guarded(unsafe { try_exec_mmap(&ctx) })
+}
+
+#[inline(always)]
+unsafe fn try_exec_mmap(ctx: &LsmContext) -> R<i32> {
+    let prot: u64 = ctx.arg(2);
+    let file: *const u8 = ctx.arg(0);
+    if prot & PROT_EXEC == 0
+        || file.is_null()
+        || cfg(&EXEC_LOCK) == 0
+        || ctl(CTL_LOCKED) == 0
+        || !in_snitch_cgroup()?
+    {
+        return Ok(0);
+    }
+    let inode: *const u8 = read(file, off(&OFF_FILE_F_INODE))?;
+    if let Some(key) = inode_key(inode)? {
+        if TRUSTED_EXES.get(&key).is_some()
+            || WATCHED.get(&key).is_some_and(|v| *v & WATCH_FILE != 0)
+        {
+            return Ok(0);
+        }
+    }
+    let dentry: *const u8 = read(file, off(&OFF_FILE_F_PATH_DENTRY))?;
+    Ok(tamper(TAMPER_EXEC_MMAP, 0, dentry))
+}
+
+/// `file_open(file)`: nobody opens a program from `TRUSTED_EXES` for
+/// writing. The exec lock trusts the inode, not its content.
+#[lsm(hook = "file_open")]
+pub fn protect_file_open(ctx: LsmContext) -> i32 {
+    let prev: i32 = ctx.arg(1);
+    if prev != 0 {
+        return prev;
+    }
+    guarded(unsafe { try_protect_open(&ctx) })
+}
+
+#[inline(always)]
+unsafe fn try_protect_open(ctx: &LsmContext) -> R<i32> {
+    if cfg(&EXEC_LOCK) == 0 {
+        return Ok(0);
+    }
+    let file: *const u8 = ctx.arg(0);
+    let f_mode: u32 = read(file, off(&OFF_FILE_F_MODE))?;
+    if f_mode & FMODE_WRITE == 0 {
+        return Ok(0);
+    }
+    let inode: *const u8 = read(file, off(&OFF_FILE_F_INODE))?;
+    match inode_key(inode)? {
+        Some(key) if TRUSTED_EXES.get(&key).is_some() => {
+            let dentry: *const u8 = read(file, off(&OFF_FILE_F_PATH_DENTRY))?;
+            Ok(tamper(TAMPER_EXE_WRITE, 0, dentry))
+        }
+        _ => Ok(0),
+    }
+}
+
+/// `path_truncate(path)`: same for truncate(2).
+#[lsm(hook = "path_truncate")]
+pub fn protect_path_truncate(ctx: LsmContext) -> i32 {
+    let prev: i32 = ctx.arg(1);
+    if prev != 0 {
+        return prev;
+    }
+    guarded(unsafe { try_protect_truncate(&ctx) })
+}
+
+#[inline(always)]
+unsafe fn try_protect_truncate(ctx: &LsmContext) -> R<i32> {
+    if cfg(&EXEC_LOCK) == 0 {
+        return Ok(0);
+    }
+    let path: *const u8 = ctx.arg(0);
+    let dentry: *const u8 = read(path, off(&OFF_PATH_DENTRY))?;
+    let inode: *const u8 = read(dentry, off(&OFF_DENTRY_D_INODE))?;
+    match inode_key(inode)? {
+        Some(key) if TRUSTED_EXES.get(&key).is_some() => {
+            Ok(tamper(TAMPER_EXE_WRITE, 1, dentry))
+        }
+        _ => Ok(0),
+    }
 }
 
 #[inline(always)]

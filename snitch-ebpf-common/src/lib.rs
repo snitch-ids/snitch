@@ -54,7 +54,7 @@ pub const EV_CHOWN: u32 = 10;
 pub const EV_INODE_FREED: u32 = 11;
 /// An attempt to disable snitch was refused. `dev`: one of `TAMPER_*`;
 /// `ino`: detail (bpf command, map id, signal, flags); `name`: the pin's
-/// name for pin removal.
+/// name for pin removal, the program for `TAMPER_EXEC`.
 pub const EV_TAMPER: u32 = 12;
 
 // What a refused tamper attempt tried to do (`Event::dev` of `EV_TAMPER`).
@@ -80,6 +80,16 @@ pub const TAMPER_KILL: u64 = 9;
 /// ptrace-level access (attach, /proc/PID/mem, pidfd_getfd) to the daemon or
 /// to init (`ino`: target tgid)
 pub const TAMPER_PTRACE: u64 = 10;
+/// A program other than the snitch binary found at boot executed in
+/// snitch.service's cgroup, which would get snitch's map fds from systemd's
+/// fd store (`name`: the program as passed to exec)
+pub const TAMPER_EXEC: u64 = 11;
+/// Opening the snitch binary found at boot for writing (`ino` 0), or
+/// truncating it (`ino` 1). `name`: its name.
+pub const TAMPER_EXE_WRITE: u64 = 12;
+/// Executable mapping in snitch.service of a file that isn't in the hash
+/// database (`LD_PRELOAD` and the like). `name`: the file's name.
+pub const TAMPER_EXEC_MMAP: u64 = 13;
 
 pub const NAME_LEN: usize = 64;
 

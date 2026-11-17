@@ -16,7 +16,7 @@ use crate::hashing::{init_hash_db, watch_files};
 use clap::Parser;
 
 use crate::config::{load_config_from_file, print_basic_config};
-use crate::persist::validate_hashes;
+use crate::persist::{accept_files, validate_hashes};
 mod authentication_logs;
 mod cli;
 mod config;
@@ -62,14 +62,17 @@ async fn main() -> Result<()> {
 
     debug!("start!");
     if args.init {
-        config.clear_database();
-        init_hash_db(&config, &dispatcher)
+        init_hash_db(&config, &dispatcher, args.root.as_deref().map(Path::new))
             .await
             .map_err(|err| {
                 error!("{err}");
                 process::exit(1);
             })
             .unwrap();
+    } else if !args.accept.is_empty() {
+        accept_files(&config, &args.accept)
+            .await
+            .wrap_err("accepting files")?;
     } else if args.scan {
         validate_hashes(&config, &dispatcher)
             .await

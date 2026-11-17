@@ -23,9 +23,20 @@ pub struct Cli {
     #[clap(short, long)]
     pub init: bool,
 
+    /// With --init: hash the files below DIR as if it were / (when building
+    /// an image). The database goes below DIR too; its paths leave DIR out.
+    #[clap(long, value_name = "DIR", requires = "init")]
+    pub root: Option<String>,
+
     /// Start scanning files
     #[clap(short, long)]
     pub scan: bool,
+
+    /// Accept the current content of these files: store their hashes in the
+    /// database (and forget the ones that don't exist). A running snitch
+    /// --watch-ebpf uses them after a restart.
+    #[clap(long, value_name = "PATH", num_args = 1..)]
+    pub accept: Vec<String>,
 
     /// Watch for file changes
     #[clap(short, long)]

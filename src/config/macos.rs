@@ -16,5 +16,6 @@ pub fn get_config() -> Config {
         url: Config::default_url(),
         token: Config::default_token(),
         heartbeat_interval: Config::default_heartbeat_interval(),
+        origin: None,
     }
 }

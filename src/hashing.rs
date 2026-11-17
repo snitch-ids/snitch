@@ -1,10 +1,10 @@
 use data_encoding::HEXUPPER;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
-use ring::digest::{Context, Digest, SHA256};
+use ring::digest::{Context, SHA256};
 use sled::Db;
 use std::fs::File;
-use std::io::{BufReader, Read};
-use std::path::Path;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use thiserror::Error;
 use walkdir::WalkDir;
@@ -15,30 +15,24 @@ use crate::dispatcher::{MessageBackend, SnitchDispatcher};
 use crate::persist::{open_database, upsert_hashes, PersistError};
 use crate::style::get_progressbar;
 
-/// Calculate a `SHA256` hash from `reader`.
-async fn sha256_digest<R: Read>(mut reader: R) -> std::io::Result<Digest> {
-    let mut context = Context::new(&SHA256);
-    let mut buffer = [0; 1024];
+/// calculate the hash of a file located at `path`.
+pub async fn hash_file(path: &Path) -> std::io::Result<String> {
+    hash_file_sync(path)
+}
 
+/// SHA-256 of the file at `path` (upper-case hex), for blocking threads.
+pub fn hash_file_sync(path: &Path) -> std::io::Result<String> {
+    let mut input = File::open(path)?;
+    let mut context = Context::new(&SHA256);
+    let mut buffer = [0; 8192];
     loop {
-        let count = reader.read(&mut buffer)?;
+        let count = input.read(&mut buffer)?;
         if count == 0 {
             break;
         }
         context.update(&buffer[..count]);
     }
-
-    Ok(context.finish())
-}
-
-/// calculate the hash of a file located at `path`.
-pub async fn hash_file(path: &Path) -> std::io::Result<String> {
-    let input = File::open(path)?;
-    let reader = BufReader::new(input);
-    let digest = sha256_digest(reader).await?;
-
-    let hash_digest = HEXUPPER.encode(digest.as_ref());
-    Ok(hash_digest)
+    Ok(HEXUPPER.encode(context.finish().as_ref()))
 }
 
 #[derive(Debug, Error)]
@@ -51,21 +45,52 @@ pub enum HashDBError {
     Persist(#[from] PersistError),
 }
 
-/// Initialize the file hash database
+/// Initialize the file hash database (replacing an existing one).
+///
+/// With `root`, hash the files below that directory as if it were `/`, for
+/// building images: the database goes below `root` too, and its paths leave
+/// `root` out.
 pub async fn init_hash_db(
     config: &Config,
     dispatcher: &SnitchDispatcher,
+    root: Option<&Path>,
 ) -> Result<(), HashDBError> {
-    let database_path = config.database_path();
+    let under_root = |path: &Path| -> PathBuf {
+        match root {
+            Some(root) => root.join(path.strip_prefix("/").unwrap_or(path)),
+            None => path.to_owned(),
+        }
+    };
+    let database_path = under_root(&config.database_path());
+    if database_path.exists() {
+        info!("database already found at: {database_path:?}. Deleting.");
+        std::fs::remove_dir_all(&database_path)?;
+    }
+    let directories: Vec<PathBuf> = config
+        .directories
+        .iter()
+        .map(|dir| under_root(Path::new(dir)))
+        .filter(|dir| {
+            let exists = dir.exists();
+            if !exists {
+                warn!("no such directory: {dir:?}. Ignoring.");
+            }
+            exists
+        })
+        .collect();
 
     let db = open_database(&database_path)?;
-    let progressbar = get_progressbar(config.directories().len() as u64, 1);
-    for directory in config.directories() {
+    let progressbar = get_progressbar(directories.len() as u64, 1);
+    for directory in &directories {
         progressbar.inc(1);
         progressbar.set_message(format!("{}", directory.display()));
-        upsert_hash_tree(&db, config, dispatcher, directory).await?;
+        upsert_hash_tree(&db, dispatcher, directory, &database_path, root).await?;
     }
-    progressbar.finish_with_message(format!("database checksum: {}", db.checksum()?));
+    progressbar.finish_with_message(format!(
+        "{} files, database checksum: {}",
+        db.len(),
+        db.checksum()?
+    ));
 
     Ok(())
 }
@@ -76,16 +101,18 @@ fn is_symlink_or_directory(entry: &Path) -> bool {
 }
 
 /// Starts walking a `start_path`, hashes all files and stores the hashes together with the
-/// path in a database `db`.
+/// path in a database `db`. The database's own directory is left out. With
+/// `root`, the stored paths leave it out.
 async fn upsert_hash_tree(
     db: &Db,
-    config: &Config,
     dispatcher: &SnitchDispatcher,
     start_path: &Path,
+    database_path: &Path,
+    root: Option<&Path>,
 ) -> std::io::Result<()> {
     let walker = WalkDir::new(start_path)
         .into_iter()
-        .filter_entry(|e| !config.is_excluded_directory(e));
+        .filter_entry(|e| !e.path().starts_with(database_path));
 
     for entry in walker {
         match entry {
@@ -93,7 +120,14 @@ async fn upsert_hash_tree(
                 warn!("{err}");
                 continue;
             }
-            Ok(value) => process_path(db, dispatcher, value.path()).await,
+            Ok(value) => {
+                let path = value.path();
+                let key = match root.and_then(|root| path.strip_prefix(root).ok()) {
+                    Some(relative) => Path::new("/").join(relative),
+                    None => path.to_owned(),
+                };
+                process_path(db, dispatcher, path, &key).await
+            }
         };
     }
 
@@ -131,7 +165,8 @@ impl From<Event> for MessageBackend {
     }
 }
 
-async fn process_path(db: &Db, dispatcher: &SnitchDispatcher, path: &Path) {
+/// Hash the file at `path` and store it as `key`.
+async fn process_path(db: &Db, dispatcher: &SnitchDispatcher, path: &Path, key: &Path) {
     debug!("processing path: {}", path.display());
     if is_symlink_or_directory(path) {
         debug!("skipping symlink/directory: {:?}", path);
@@ -141,7 +176,7 @@ async fn process_path(db: &Db, dispatcher: &SnitchDispatcher, path: &Path) {
         warn!("{err} on {:?}. Skipping.", path);
         format!("{:?}", err)
     });
-    match upsert_hashes(db, path, &hash) {
+    match upsert_hashes(db, key, &hash) {
         Ok(_) => {}
         Err(e) => {
             dispatcher
