@@ -177,6 +177,21 @@ impl Btf {
             .with_context(|| format!("struct {name} not found in kernel BTF"))
     }
 
+    /// Whether there is a function named `name`.
+    pub fn has_func(&self, name: &str) -> bool {
+        self.func_params(name).is_some()
+    }
+
+    /// Number of parameters of the function named `name`.
+    pub fn func_params(&self, name: &str) -> Option<u32> {
+        let func = self
+            .types
+            .iter()
+            .find(|t| t.kind == KIND_FUNC && self.name(t.name_off) == name)?;
+        let proto = self.types.get(func.size_or_type as usize)?;
+        (proto.kind == KIND_FUNC_PROTO).then_some(proto.vlen)
+    }
+
     /// Find `member` in `struct struct_name`, descending into anonymous
     /// structs and unions.
     pub fn member(&self, struct_name: &str, member: &str) -> Result<Member> {

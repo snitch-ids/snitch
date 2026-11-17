@@ -18,6 +18,7 @@ use clap::Parser;
 use crate::config::{load_config_from_file, print_basic_config};
 use crate::persist::{accept_files, validate_hashes};
 mod authentication_logs;
+mod check;
 mod cli;
 mod config;
 mod dispatcher;
@@ -49,6 +50,10 @@ async fn main() -> Result<()> {
     }
 
     let config_file = Path::new(&args.config);
+    if args.check {
+        let ok = check::run(config_file).await;
+        process::exit(if ok { 0 } else { 1 });
+    }
 
     let config = load_config_from_file(config_file)
         .wrap_err(format!("failed loading config file: {:?}", config_file))?;
@@ -81,6 +86,22 @@ async fn main() -> Result<()> {
                 process::exit(1);
             })
             .expect("Checking files failed");
+    } else if args.watch {
+        #[cfg(all(feature = "ebpf", target_os = "linux"))]
+        match ebpf::unavailable() {
+            None => ebpf::watch_ebpf(&config, &dispatcher)
+                .await
+                .wrap_err("BPF file monitoring failed")?,
+            Some(reason) => {
+                warn!(
+                    "watching with inotify, not with BPF LSM programs: {reason} (snitch --check \
+                     tells how to change that)"
+                );
+                watch_files(&config, &dispatcher).await;
+            }
+        }
+        #[cfg(not(all(feature = "ebpf", target_os = "linux")))]
+        watch_files(&config, &dispatcher).await;
     } else if args.watch_files {
         watch_files(&config, &dispatcher).await;
     } else if args.watch_ebpf {

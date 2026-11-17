@@ -19,6 +19,11 @@ pub struct Cli {
     #[clap(long)]
     pub send_test_message: bool,
 
+    /// Check what works on this machine and what's missing (kernel support,
+    /// protection at boot, configuration, database, backend), with the fix
+    /// for each. Exits with 1 if something snitch needs is missing.
+    #[clap(long)]
+    pub check: bool,
     /// Initialize the database
     #[clap(short, long)]
     pub init: bool,
@@ -38,7 +43,13 @@ pub struct Cli {
     #[clap(long, value_name = "PATH", num_args = 1..)]
     pub accept: Vec<String>,
 
-    /// Watch for file changes
+    /// Watch the files the best way this machine supports: like
+    /// --watch-ebpf if the kernel has the BPF LSM active (or snitch's
+    /// programs were loaded at boot), otherwise like --watch-files.
+    /// snitch --check tells which, and why.
+    #[clap(long)]
+    pub watch: bool,
+    /// Watch for file changes (inotify)
     #[clap(short, long)]
     pub watch_files: bool,
 

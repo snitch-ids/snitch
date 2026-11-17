@@ -1,0 +1,16 @@
+[Unit]
+Description=snitch: hash the watched files (first start)
+Documentation=https://github.com/snitch-ids/snitch
+# The database in the default snitch_root (/etc/snitch/); change both
+# together.
+ConditionPathExists=!/etc/snitch/db
+DefaultDependencies=no
+After=local-fs.target systemd-journald.socket
+Before=sysinit.target shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/snitch --init
+# Hashing /usr can take minutes.
+TimeoutStartSec=infinity

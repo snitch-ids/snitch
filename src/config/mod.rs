@@ -111,9 +111,50 @@ pub fn load_config_from_file(path: &Path) -> Result<Config> {
 }
 
 pub fn print_basic_config() -> Result<()> {
-    let config = Config::demo_config();
-    println!("{}", serde_yaml::to_string(&config)?);
+    print!("{}", demo_config_text()?);
     Ok(())
+}
+
+/// `snitch --demo-config`: a commented configuration to start from, with the
+/// default directories that exist here and aren't symlinks.
+pub fn demo_config_text() -> Result<String> {
+    let demo = Config::demo_config();
+    let directories: Vec<&String> = demo
+        .directories
+        .iter()
+        .filter(|d| std::fs::symlink_metadata(d).is_ok_and(|m| m.is_dir()))
+        .collect();
+    let senders: String = serde_yaml::to_string(&demo.sender)?
+        .lines()
+        .map(|l| format!("#  {l}\n"))
+        .collect();
+    Ok(format!(
+        "# snitch configuration. `snitch --check` tells what works and what's missing.
+
+# Directories whose files snitch hashes (snitch --init) and watches.
+directories:
+{directories}
+# Where snitch keeps its hash database (<snitch_root>/db).
+snitch_root: {root}
+
+# The backend gets snitch's messages and heartbeats, and alerts you when a
+# host stops sending them. Get a token at https://snitch.cool (or from your
+# own backend). Without one, snitch only logs.
+url: {url}
+token: ''
+
+# Seconds between heartbeats (with a token); 0 turns them off.
+heartbeat_interval: {interval}
+
+# Notifications that snitch sends itself, besides the backend, e.g.:
+#sender:
+{senders}sender: {{}}
+",
+        directories = serde_yaml::to_string(&directories)?,
+        root = serde_yaml::to_string(&demo.snitch_root)?.trim_end(),
+        url = serde_yaml::to_string(&demo.url)?.trim_end(),
+        interval = demo.heartbeat_interval,
+    ))
 }
 
 #[cfg(test)]
@@ -123,5 +164,15 @@ mod tests {
     #[test]
     fn test_basic_config() {
         let _x = Config::demo_config();
+    }
+
+    #[test]
+    fn demo_config_text_parses() {
+        let text = super::demo_config_text().unwrap();
+        let config: Config = serde_yaml::from_str(&text).unwrap();
+        assert!(config.token.is_empty());
+        assert_eq!(config.sender, chatterbox::dispatcher::Sender::default());
+        assert!(!config.directories.is_empty());
+        assert!(text.contains("#  telegram:"));
     }
 }

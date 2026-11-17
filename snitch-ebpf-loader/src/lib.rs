@@ -52,14 +52,16 @@ const PROTECTED_MAP_NAMES: &[&str] = &[
     "TRUSTED_EXES",
 ];
 
-/// `WATCHED` size when loaded at boot, before the database is known. The map
-/// isn't preallocated, so unused entries cost nothing.
-pub const DEFAULT_MAX_WATCHED: u32 = 131_072;
+/// `WATCHED` size when loaded at boot, before the database is known: room
+/// for a desktop or server distribution's /usr and /etc (Ubuntu: ~150k
+/// files). The map isn't preallocated, so unused entries only cost their
+/// hash bucket (16 bytes each, 4 MiB here).
+pub const DEFAULT_MAX_WATCHED: u32 = 262_144;
 
-/// File monitoring: LSM programs (program name = hook name).
-pub const MONITOR_PROGRAMS: &[&str] = &[
+/// File monitoring: LSM programs (program name = hook name), plus one of
+/// [`CLOSE_PROGRAMS`]; `lsm_programs` has the list for this kernel.
+const MONITOR_PROGRAMS: &[&str] = &[
     "file_open",
-    "file_release",
     "path_truncate",
     "path_chmod",
     "path_chown",
@@ -72,9 +74,16 @@ pub const MONITOR_PROGRAMS: &[&str] = &[
     "inode_free_security",
 ];
 
+/// A writer is done with a file: `file_release` where the kernel has it
+/// (6.9 and later), else `file_free_security` (program, hook).
+const CLOSE_PROGRAMS: [(&str, &str); 2] = [
+    ("file_release", "file_release"),
+    ("file_free", "file_free_security"),
+];
+
 /// Self-protection: LSM programs (program, hook), attached at boot only.
 /// Plus the cgroup/sysctl program `sysctl_guard`.
-pub const PROTECT_PROGRAMS: &[(&str, &str)] = &[
+const PROTECT_PROGRAMS: &[(&str, &str)] = &[
     ("bpf", "bpf"),
     ("bpf_map", "bpf_map"),
     ("sb_umount", "sb_umount"),
@@ -123,11 +132,61 @@ pub fn inode_key(md: &fs::Metadata) -> InodeKey {
     }
 }
 
+fn kernel_btf() -> Result<btf::Btf> {
+    btf::Btf::from_file(Path::new("/sys/kernel/btf/vmlinux"))
+        .wrap_err("reading kernel BTF (needs CONFIG_DEBUG_INFO_BTF)")
+}
+
+/// Whether the running kernel has the BPF LSM built in (`CONFIG_BPF_LSM`),
+/// active or not: its hooks are functions named `bpf_lsm_<hook>`.
+pub fn kernel_has_bpf_lsm() -> Result<bool> {
+    Ok(kernel_btf()?.has_func("bpf_lsm_file_open"))
+}
+
+/// The LSM programs for the running kernel, as (program, hook): file
+/// monitoring and, with `protect`, self-protection. Where a hook differs
+/// between kernel versions, there's a program for each.
+fn lsm_programs_for(btf: &btf::Btf, protect: bool) -> Vec<(&'static str, &'static str)> {
+    let close = match btf.has_func("bpf_lsm_file_release") {
+        true => CLOSE_PROGRAMS[0],
+        false => CLOSE_PROGRAMS[1],
+    };
+    let monitor = MONITOR_PROGRAMS.iter().map(|name| (*name, *name));
+    let protect =
+        PROTECT_PROGRAMS
+            .iter()
+            .copied()
+            .filter(|_| protect)
+            .map(|(name, hook)| match name {
+                // `bool kernel` was added after 6.8
+                "bpf" if btf.func_params("bpf_lsm_bpf") == Some(3) => ("bpf_3args", hook),
+                _ => (name, hook),
+            });
+    monitor.chain([close]).chain(protect).collect()
+}
+
+fn lsm_programs(protect: bool) -> Result<Vec<(&'static str, &'static str)>> {
+    Ok(lsm_programs_for(&kernel_btf()?, protect))
+}
+
+/// LSM hooks that snitch's programs attach to and the running kernel
+/// doesn't have (an older kernel, or a hook it was built without), for file
+/// monitoring and, with `protect`, for self-protection.
+pub fn missing_lsm_hooks(protect: bool) -> Result<Vec<&'static str>> {
+    let btf = kernel_btf()?;
+    let mut missing = Vec::new();
+    for (_, hook) in lsm_programs_for(&btf, protect) {
+        if !btf.has_func(&format!("bpf_lsm_{hook}")) && !missing.contains(&hook) {
+            missing.push(hook);
+        }
+    }
+    Ok(missing)
+}
+
 /// Values for the programs' `OFF_*` globals: member offsets of the kernel
 /// structs they read, from the running kernel's BTF.
 pub fn struct_offsets() -> Result<Vec<(&'static str, u32)>> {
-    let btf = btf::Btf::from_file(Path::new("/sys/kernel/btf/vmlinux"))
-        .wrap_err("reading kernel BTF (needs CONFIG_DEBUG_INFO_BTF)")?;
+    let btf = kernel_btf()?;
     let get = |s: &str, m: &str, size: u32| -> Result<u32> {
         // `old|new`: a member that was renamed
         let member = match m.split_once('|') {
@@ -213,12 +272,7 @@ pub fn load(opts: &LoadOptions) -> Result<Ebpf> {
     let mut bpf = loader.load(BPF_OBJ).wrap_err("loading the BPF object")?;
 
     let btf = AyaBtf::from_sys_fs().wrap_err("reading kernel BTF")?;
-    let monitor = MONITOR_PROGRAMS.iter().map(|name| (*name, *name));
-    let protect = PROTECT_PROGRAMS
-        .iter()
-        .copied()
-        .filter(|_| opts.protect.is_some());
-    for (name, hook) in monitor.chain(protect) {
+    for (name, hook) in lsm_programs(opts.protect.is_some())? {
         let prog: &mut Lsm = bpf
             .program_mut(name)
             .wrap_err_with(|| format!("BPF program {name} missing"))?
@@ -238,7 +292,7 @@ pub fn load(opts: &LoadOptions) -> Result<Ebpf> {
 
 /// Attach the file monitoring programs. They stay attached while `bpf` lives.
 pub fn attach_monitor(bpf: &mut Ebpf) -> Result<()> {
-    for name in MONITOR_PROGRAMS {
+    for (name, _) in lsm_programs(false)? {
         let prog: &mut Lsm = bpf.program_mut(name).unwrap().try_into()?;
         prog.attach()
             .wrap_err_with(|| format!("attaching BPF LSM program {name}"))?;
@@ -258,7 +312,7 @@ fn map_data<'a>(bpf: &'a Ebpf, name: &str) -> Result<&'a MapData> {
 
 /// Number of programs [`pin_all`] attaches.
 pub fn program_count() -> usize {
-    MONITOR_PROGRAMS.len() + PROTECT_PROGRAMS.len() + 1
+    MONITOR_PROGRAMS.len() + 1 + PROTECT_PROGRAMS.len() + 1
 }
 
 /// Boot: attach all programs from a [`load`] with `protect`, pin links and
@@ -285,8 +339,7 @@ pub fn pin_all(
         .pin(pin(SELFTEST_PIN.into()))
         .wrap_err("pinning the self-test pin")?;
 
-    let protect = PROTECT_PROGRAMS.iter().map(|(name, _)| name);
-    for name in MONITOR_PROGRAMS.iter().chain(protect) {
+    for (name, _) in lsm_programs(true)? {
         let prog: &mut Lsm = bpf.program_mut(name).unwrap().try_into()?;
         let id = prog
             .attach()

@@ -65,6 +65,27 @@ const TAMPER_REPEAT: Duration = Duration::from_secs(60);
 /// Names of the map fds in systemd's fd store: prefix + map name.
 const FDNAME_PREFIX: &str = "snitch-map-";
 
+/// Why `--watch` can't use BPF LSM programs here, or None if it can.
+pub fn unavailable() -> Option<String> {
+    if Path::new(PIN_DIR).join("map_CONTROL").exists() {
+        return None;
+    }
+    if !Path::new("/sys/kernel/btf/vmlinux").exists() {
+        return Some("the kernel has no BTF (CONFIG_DEBUG_INFO_BTF)".into());
+    }
+    match snitch_ebpf_loader::missing_lsm_hooks(false) {
+        Ok(missing) if !missing.is_empty() => {
+            return Some(format!(
+                "the kernel lacks LSM hooks snitch needs: {}",
+                missing.join(", ")
+            ))
+        }
+        Err(err) => return Some(format!("{err:#}")),
+        Ok(_) => {}
+    }
+    check_bpf_lsm_active().err().map(|err| err.to_string())
+}
+
 fn check_bpf_lsm_active() -> Result<()> {
     // securityfs may not be mounted; then attaching tells us.
     if let Ok(lsms) = std::fs::read_to_string("/sys/kernel/security/lsm") {

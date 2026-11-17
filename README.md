@@ -31,6 +31,40 @@ cargo install snitch
 
 Note that access to root level folders and monitoring authentication logs usually requires an installation as `root`.
 
+## Linux distributions (systemd)
+
+On Debian, Ubuntu, Fedora and other distributions with systemd, as root:
+
+1. Build snitch with BPF support (see "Watch files with BPF LSM programs"
+   below), install it, and create the configuration (see Configuration):
+   ```
+   install -m 755 target/release/snitch /usr/bin/
+   install -m 755 target/release/snitch-ebpf-load /usr/sbin/
+   mkdir -p /etc/snitch
+   snitch --demo-config > /etc/snitch/config.yaml
+   ```
+2. See what works on this machine and what's missing:
+   ```
+   snitch --check
+   ```
+   It prints the fix for each problem, for example the `lsm=` kernel
+   parameter when the kernel has the BPF LSM but doesn't use it (Ubuntu).
+3. Start snitch now and at every boot:
+   ```
+   install -m 644 extra/systemd/snitch.service extra/systemd/snitch-init.service /etc/systemd/system/
+   systemctl daemon-reload
+   systemctl enable --now snitch.service
+   ```
+   The first start hashes the watched files (`snitch-init.service`).
+   `snitch --watch` then uses BPF LSM programs if the kernel has them,
+   otherwise inotify.
+4. Optionally, load the BPF programs at boot, so that root can't stop
+   snitch (see "Protection at boot").
+
+Tested with Ubuntu 24.04 (Linux 6.8) and Yocto (Linux 6.18). The BPF LSM
+programs need a kernel with BTF and the BPF LSM; where something is
+missing, `snitch --check` says what, and `snitch --watch` uses inotify.
+
 Configuration
 -------------
 
@@ -88,6 +122,12 @@ sender:
 Usage
 -----
 
+See what works on this machine and what's missing, with the fix for each
+(kernel support, protection at boot, configuration, database, backend):
+```
+snitch --check
+```
+
 Test the configured senders:
 ```
 snitch --send-test-message
@@ -103,7 +143,14 @@ and trigger a scan to verify file integrity with
 snitch --scan
 ```
 
-Watch for file changes:
+Watch for file changes, the best way this machine supports (like
+`--watch-ebpf` if the kernel has the BPF LSM active, otherwise like
+`--watch-files`):
+```
+snitch --watch
+```
+
+Watch for file changes with inotify:
 ```
 snitch --watch-files
 ```
@@ -127,36 +174,15 @@ kernel with `CONFIG_BPF_LSM` and BTF, `bpf` in the active LSMs
 rustup toolchain install nightly --component rust-src
 cargo install bpf-linker
 cargo build --release --features ebpf
+cargo build --release -p snitch-ebpf-loader   # snitch-ebpf-load, for protection at boot
 ```
 `snitch-ebpf-loader/build.rs` builds the BPF programs in `snitch-ebpf/` with
 nightly. To use a prebuilt object instead (e.g. in Yocto), set
 `SNITCH_BPF_OBJ=<path>`.
 
 Started like this, snitch loads the programs itself, and they stay attached
-while it runs. On a device, load them at boot instead, from an initramfs
-bundled into the kernel (the Yocto layer meta-snitch does this):
-```
-snitch-ebpf-load --root /rootfs --cgroup /sys/fs/cgroup \
-  --trusted-exe /rootfs/usr/bin/snitch \
-  --trusted-exe /rootfs/usr/lib/systemd/systemd-executor
-```
-`snitch-ebpf-load` (in `snitch-ebpf-loader/`) attaches the monitoring
-programs plus self-protection, and pins them in `/sys/fs/bpf/snitch`. Then
-`snitch --watch-ebpf` claims the pinned maps; from then on, even root can't
-open them, detach or unpin the programs, unmount bpffs, `/sys` or `/`, write
-`kernel.ftrace_enabled` (which would disarm them), kill or ptrace snitch, or
-ptrace init. Refused attempts are reported as "Tamper attempt blocked". Run
-it as a systemd `Type=notify` service with `FileDescriptorStoreMax=8` and
-`FileDescriptorStorePreserve=yes`: snitch keeps the map fds in systemd's fd
-store and gets them back from there after a restart.
-
-systemd hands those fds to whatever `snitch.service` starts. With
-`--trusted-exe`, the exec lock keeps a unit drop-in from running anything
-else there:
-- only the given programs (as found at boot) may run in the unit
-- nobody may open them for writing
-- once snitch has claimed its maps, executable mappings in the unit must
-  come from files in the hash database (no `LD_PRELOAD` from `/tmp`)
+while it runs. Root can still stop snitch. To prevent that, load them at
+boot (see "Protection at boot").
 
 `--watch-ebpf` compares every file with the database when it starts, and
 reports the ones that changed or disappeared while it wasn't watching. Each
@@ -176,6 +202,64 @@ snitch --init --root /path/to/rootfs --config /path/to/rootfs/etc/snitch/config.
 programs loaded at boot, it also checks that removing a protected pin is
 refused. A failure is reported as "Self-test failed". This covers the
 programs being detached or disarmed in ways the protection doesn't know about.
+
+Protection at boot
+------------------
+
+`snitch-ebpf-load` (in `snitch-ebpf-loader/`) loads the BPF programs from
+the initramfs, after the root file system is mounted and before the system
+switches to it:
+```
+snitch-ebpf-load --root /sysroot
+```
+It attaches the monitoring programs plus self-protection, and pins them in
+`/sys/fs/bpf/snitch` (mounting bpffs there if needed). Then snitch claims
+the pinned maps. From then on, even root can't:
+- open them, or detach or unpin the programs
+- unmount bpffs, `/sys` or `/`
+- write `kernel.ftrace_enabled` (which would disarm the programs)
+- kill or ptrace snitch, or ptrace init
+
+Refused attempts are reported as "Tamper attempt blocked". snitch keeps the
+map fds in systemd's fd store (`extra/systemd/snitch.service`) and gets
+them back from there after a restart.
+
+systemd hands those fds to whatever `snitch.service` starts. The exec lock
+keeps a unit drop-in from running anything else there:
+- only snitch and systemd-executor (as found at boot) may run in the unit
+  (`--trusted-exe` to name others)
+- nobody may open them for writing
+- once snitch has claimed its maps, executable mappings in the unit must
+  come from files in the hash database (no `LD_PRELOAD` from `/tmp`)
+
+To set it up:
+- Debian, Ubuntu (initramfs-tools):
+  ```
+  install -m 755 extra/initramfs-tools/hooks/snitch /etc/initramfs-tools/hooks/
+  install -m 755 extra/initramfs-tools/scripts/init-bottom/snitch /etc/initramfs-tools/scripts/init-bottom/
+  update-initramfs -u
+  ```
+  Ubuntu cloud images first try to boot without an initramfs, so the hook
+  never runs. Turn that off, then update GRUB:
+  ```
+  rm /etc/default/grub.d/40-force-partuuid.cfg
+  update-grub
+  ```
+- Fedora, RHEL and others with dracut:
+  ```
+  mkdir -p /usr/lib/dracut/modules.d/95snitch
+  install -m 755 extra/dracut/95snitch/* /usr/lib/dracut/modules.d/95snitch/
+  dracut -f
+  ```
+- Yocto: the layer meta-snitch bundles an initramfs with the loader into
+  the kernel.
+
+After a reboot, `snitch --check` shows "BPF programs loaded at boot". Also
+boot with `lockdown=integrity`: otherwise root can load unsigned kernel
+modules and get around the protection. Most distributions build the
+initramfs on the device and don't sign it, so root can build one without
+the loader and reboot. The heartbeat then reports the reboot and the
+changed mode. A signed boot chain (e.g. a signed UKI) closes that.
 
 Heartbeats
 ----------

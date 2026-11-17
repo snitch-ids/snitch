@@ -1,0 +1,27 @@
+[Unit]
+Description=snitch file integrity monitoring
+Documentation=https://github.com/snitch-ids/snitch
+# Early: with snitch's BPF programs loaded at boot (snitch-ebpf-load in the
+# initramfs), the first process to open their maps owns them.
+DefaultDependencies=no
+Requires=snitch-init.service
+After=snitch-init.service local-fs.target systemd-journald.socket
+Before=sysinit.target shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=notify
+# --watch: BPF LSM programs if the kernel has them, otherwise inotify
+# (snitch --check tells which, and why).
+ExecStart=/usr/bin/snitch --watch
+Restart=always
+RestartSec=5
+# The OOM killer's signal doesn't go through snitch's task_kill rule.
+OOMScoreAdjust=-1000
+# With BPF, snitch keeps its map fds here: after the first start nobody can
+# open the maps again, so restarts get them back from systemd.
+FileDescriptorStoreMax=8
+FileDescriptorStorePreserve=yes
+
+[Install]
+WantedBy=sysinit.target

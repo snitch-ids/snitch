@@ -1,0 +1,20 @@
+#!/bin/sh
+# initramfs-tools: load snitch's BPF programs (and their self-protection)
+# after the root file system is mounted at ${rootmnt}, before run-init
+# switches to it. Install to /etc/initramfs-tools/scripts/init-bottom/snitch.
+# If loading fails, the system still boots, and snitch --watch loads the
+# monitoring programs itself, without self-protection.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in
+prereqs)
+	prereqs
+	exit 0
+	;;
+esac
+
+if out=$(/usr/sbin/snitch-ebpf-load --root "${rootmnt}" 2>&1); then
+	echo "snitch: $out" > /dev/kmsg
+else
+	echo "snitch: loading BPF programs failed: $out" > /dev/kmsg
+fi

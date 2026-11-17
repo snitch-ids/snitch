@@ -350,6 +350,14 @@ pub fn file_release(ctx: LsmContext) -> i32 {
     verdict(unsafe { file_write_event(&ctx, EV_CLOSE_WRITE) })
 }
 
+/// The same for kernels without `file_release` (before 6.9): the same
+/// `__fput` frees the file right after its `release`. The kernel marks the
+/// argument untrusted; `read` copies with `bpf_probe_read_kernel`.
+#[lsm(hook = "file_free_security")]
+pub fn file_free(ctx: LsmContext) -> i32 {
+    verdict(unsafe { file_write_event(&ctx, EV_CLOSE_WRITE) })
+}
+
 #[inline(always)]
 unsafe fn file_write_event(ctx: &LsmContext, kind: u32) -> R<()> {
     let file: *const u8 = ctx.arg(0);
@@ -633,9 +641,26 @@ pub fn bpf(ctx: LsmContext) -> i32 {
     if prev != 0 {
         return prev;
     }
-    let cmd: u64 = ctx.arg::<u64>(0) & 0xffff_ffff;
     let kernel: u64 = ctx.arg::<u64>(3) & 0xff;
-    if kernel == 0 && (cmd == BPF_LINK_UPDATE || cmd == BPF_LINK_DETACH) {
+    bpf_cmd(ctx.arg(0), kernel != 0)
+}
+
+/// The same for kernels whose hook has no `kernel` argument yet,
+/// `bpf(cmd, attr, size)` (6.8, for example). The verifier refuses reading an
+/// argument the hook doesn't have, so the loader picks one of the two.
+#[lsm(hook = "bpf")]
+pub fn bpf_3args(ctx: LsmContext) -> i32 {
+    let prev: i32 = ctx.arg(3);
+    if prev != 0 {
+        return prev;
+    }
+    bpf_cmd(ctx.arg(0), false)
+}
+
+#[inline(always)]
+fn bpf_cmd(cmd: u64, kernel: bool) -> i32 {
+    let cmd = cmd & 0xffff_ffff;
+    if !kernel && (cmd == BPF_LINK_UPDATE || cmd == BPF_LINK_DETACH) {
         return unsafe { tamper(TAMPER_BPF_CMD, cmd, core::ptr::null()) };
     }
     0
@@ -904,9 +929,7 @@ unsafe fn try_protect_truncate(ctx: &LsmContext) -> R<i32> {
     let dentry: *const u8 = read(path, off(&OFF_PATH_DENTRY))?;
     let inode: *const u8 = read(dentry, off(&OFF_DENTRY_D_INODE))?;
     match inode_key(inode)? {
-        Some(key) if TRUSTED_EXES.get(&key).is_some() => {
-            Ok(tamper(TAMPER_EXE_WRITE, 1, dentry))
-        }
+        Some(key) if TRUSTED_EXES.get(&key).is_some() => Ok(tamper(TAMPER_EXE_WRITE, 1, dentry)),
         _ => Ok(0),
     }
 }

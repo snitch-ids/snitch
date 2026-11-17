@@ -187,6 +187,28 @@ async fn process_path(db: &Db, dispatcher: &SnitchDispatcher, path: &Path, key: 
     };
 }
 
+/// Tell systemd that the service is up (`Type=notify`): one datagram to
+/// `$NOTIFY_SOCKET`.
+fn notify_ready() {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::linux::net::SocketAddrExt;
+        use std::os::unix::net::{SocketAddr, UnixDatagram};
+        let Some(socket) = std::env::var_os("NOTIFY_SOCKET") else {
+            return;
+        };
+        let bytes = socket.as_encoded_bytes();
+        let addr = match bytes.strip_prefix(b"@") {
+            Some(name) => SocketAddr::from_abstract_name(name),
+            None => SocketAddr::from_pathname(Path::new(&socket)),
+        };
+        let sent = addr.and_then(|addr| UnixDatagram::unbound()?.send_to_addr(b"READY=1", &addr));
+        if let Err(err) = sent {
+            warn!("telling systemd that snitch is ready: {err}");
+        }
+    }
+}
+
 pub async fn watch_files(config: &Config, dispatcher: &SnitchDispatcher) {
     let _health = crate::heartbeat::start(config, crate::heartbeat::Mode::Files);
     // Create a channel to receive the events.
@@ -202,6 +224,7 @@ pub async fn watch_files(config: &Config, dispatcher: &SnitchDispatcher) {
         info!("adding watcher for {:?}", directory);
         watcher.watch(directory, RecursiveMode::Recursive).unwrap();
     }
+    notify_ready();
 
     for res in rx {
         match res {
