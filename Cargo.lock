@@ -2039,6 +2039,7 @@ dependencies = [
  "ring",
  "sd-notify",
  "serde",
+ "serde_json",
  "serde_yaml",
  "sled",
  "snitch-ebpf-common",

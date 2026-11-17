@@ -19,6 +19,8 @@
 //! - Fallback (no pins): load and attach the monitoring programs here. They
 //!   stay attached while this process runs.
 
+mod selftest;
+
 use std::collections::HashMap as StdHashMap;
 use std::os::fd::{AsFd, FromRawFd, OwnedFd};
 use std::path::{Path, PathBuf};
@@ -43,6 +45,7 @@ use walkdir::WalkDir;
 use crate::config::Config;
 use crate::dispatcher::{MessageBackend, SnitchDispatcher};
 use crate::hashing::hash_file;
+use crate::heartbeat::{self, Mode, SharedHealth};
 use crate::persist::open_database;
 
 /// Hash a file again this long after it was opened for writing, in case the
@@ -108,6 +111,9 @@ struct Monitor<'a> {
     /// When each kind of tamper attempt was last reported.
     tamper_reported: StdHashMap<(u64, u64, String), Instant>,
     later: mpsc::UnboundedSender<Later>,
+    selftest: selftest::SelfTest,
+    /// Reported in heartbeats.
+    health: SharedHealth,
 }
 
 /// The maps the daemon works with.
@@ -310,6 +316,17 @@ pub async fn watch_ebpf(config: &Config, dispatcher: &SnitchDispatcher) -> Resul
     let stats: PerCpuArray<MapData, u64> = PerCpuArray::try_from(Map::PerCpuArray(maps.stats))?;
     let _keep_attached = maps._bpf;
     let (later_tx, mut later_rx) = mpsc::unbounded_channel();
+    let selftest = selftest::SelfTest::new(pinned);
+    info!(
+        "self-test every {} s: {}",
+        selftest::INTERVAL.as_secs(),
+        selftest.scope()
+    );
+    let mode = if pinned {
+        Mode::Protected
+    } else {
+        Mode::Unprotected
+    };
     let mut monitor = Monitor {
         dispatcher,
         map,
@@ -319,12 +336,18 @@ pub async fn watch_ebpf(config: &Config, dispatcher: &SnitchDispatcher) -> Resul
         reported: StdHashMap::new(),
         tamper_reported: StdHashMap::new(),
         later: later_tx,
+        selftest,
+        health: heartbeat::start(config, mode),
     };
     if std::env::var_os("NOTIFY_SOCKET").is_some() {
         let _ = sd_notify::notify(&[sd_notify::NotifyState::Ready]);
     }
 
     let mut stats_tick = tokio::time::interval(STATS_INTERVAL);
+    let mut selftest_tick = tokio::time::interval(selftest::INTERVAL);
+    // After a pause (SIGSTOP, suspend), no back-to-back rounds: the first
+    // would be judged before its events arrive.
+    selftest_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut dropped_reported = 0;
     let mut read_errors_logged = false;
     loop {
@@ -345,8 +368,15 @@ pub async fn watch_ebpf(config: &Config, dispatcher: &SnitchDispatcher) -> Resul
                 }
             }
             Some(later) = later_rx.recv() => monitor.handle_later(later).await,
+            _ = selftest_tick.tick() => {
+                let dropped = stat_total(&stats, STAT_DROPPED)?;
+                if let Some(verdict) = monitor.selftest.start(&mut monitor.map, dropped) {
+                    monitor.verdict(verdict).await;
+                }
+            }
             _ = stats_tick.tick() => {
                 let dropped = stat_total(&stats, STAT_DROPPED)?;
+                monitor.health.lock().unwrap().events_dropped = dropped;
                 if dropped > dropped_reported {
                     monitor
                         .send(
@@ -437,6 +467,12 @@ impl Monitor<'_> {
     }
 
     async fn handle(&mut self, ev: &Event) {
+        if self.selftest.owns(ev) {
+            if let Some(verdict) = self.selftest.record(ev) {
+                self.verdict(verdict).await;
+            }
+            return;
+        }
         if ev.kind == EV_TAMPER {
             self.tamper(ev).await;
             return;
@@ -517,7 +553,44 @@ impl Monitor<'_> {
         }
     }
 
+    async fn verdict(&mut self, verdict: selftest::Verdict) {
+        let (ok, detail) = match verdict {
+            selftest::Verdict::Pass => (true, String::new()),
+            selftest::Verdict::Fail(detail) => (false, detail),
+            selftest::Verdict::Inconclusive => {
+                debug!("self-test inconclusive: BPF events were dropped");
+                return;
+            }
+        };
+        let before = self
+            .health
+            .lock()
+            .unwrap()
+            .selftest
+            .replace(heartbeat::SelfTest {
+                ok,
+                detail: detail.clone(),
+            });
+        match before {
+            None if ok => info!("self-test passed"),
+            Some(before) if before.ok && ok => debug!("self-test passed"),
+            Some(before) if !before.ok && ok => {
+                self.send(
+                    "Self-test passed again",
+                    "The BPF programs report the canary again.".into(),
+                )
+                .await
+            }
+            // Report a failure once, unless it changes.
+            Some(before) if !before.ok && before.detail == detail => {
+                debug!("self-test still failing: {detail}")
+            }
+            _ => self.send("Self-test failed", detail).await,
+        }
+    }
+
     async fn tamper(&mut self, ev: &Event) {
+        self.health.lock().unwrap().tamper_blocked += 1;
         let comm = c_str(&ev.comm);
         let what = tamper_description(ev.dev, ev.ino, &c_str(&ev.name));
         let now = Instant::now();

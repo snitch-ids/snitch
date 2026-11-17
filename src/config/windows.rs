@@ -9,5 +9,6 @@ pub fn get_config() -> Config {
         snitch_root: "C:/ProgramData/snitch".to_owned(),
         url: Config::default_url(),
         token: "".to_string(),
+        heartbeat_interval: Config::default_heartbeat_interval(),
     }
 }

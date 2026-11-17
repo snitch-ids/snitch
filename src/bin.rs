@@ -24,6 +24,7 @@ mod dispatcher;
 #[cfg(all(feature = "ebpf", target_os = "linux"))]
 mod ebpf;
 mod hashing;
+mod heartbeat;
 mod persist;
 mod style;
 mod test_utils;

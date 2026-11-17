@@ -7,7 +7,7 @@ use tokio::sync::broadcast::error::SendError as BroadcastSendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 lazy_static! {
-    static ref HOSTNAME: String = hostname::get()
+    pub(crate) static ref HOSTNAME: String = hostname::get()
         .expect("failed to get hostname")
         .to_str()
         .unwrap()

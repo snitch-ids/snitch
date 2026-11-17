@@ -148,6 +148,28 @@ it as a systemd `Type=notify` service with `FileDescriptorStoreMax=8` and
 `FileDescriptorStorePreserve=yes`: snitch keeps the map fds in systemd's fd
 store and gets them back from there after a restart.
 
+`--watch-ebpf` tests itself every minute. It writes a canary file
+(`/run/snitch/canary`) and expects the BPF programs to report it. With the
+programs loaded at boot, it also checks that removing a protected pin is
+refused. A failure is reported as "Self-test failed". This covers the
+programs being detached or disarmed in ways the protection doesn't know about.
+
+Heartbeats
+----------
+
+With a backend token, `--watch-ebpf` and `--watch-files` send a heartbeat
+every `heartbeat_interval` seconds (config, default 60; 0 turns them off).
+The heartbeat carries the boot id, the monitoring mode and the self-test
+result. The backend alerts when:
+- heartbeats stop, and when they come back
+- snitch restarts, or the host reboots
+- a heartbeat is forged or replayed
+
+Each snitch process signs its heartbeats with a random key of its own
+(HMAC-SHA256) and numbers them. Whoever stops snitch can't keep its
+heartbeats going: another sender is another session, which the backend
+reports as a restart.
+
 Performance
 -----------
 

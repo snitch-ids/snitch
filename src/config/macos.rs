@@ -15,5 +15,6 @@ pub fn get_config() -> Config {
         snitch_root: "/etc/snitch".to_owned(),
         url: Config::default_url(),
         token: Config::default_token(),
+        heartbeat_interval: Config::default_heartbeat_interval(),
     }
 }

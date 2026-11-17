@@ -153,6 +153,7 @@ async fn process_path(db: &Db, dispatcher: &SnitchDispatcher, path: &Path) {
 }
 
 pub async fn watch_files(config: &Config, dispatcher: &SnitchDispatcher) {
+    let _health = crate::heartbeat::start(config, crate::heartbeat::Mode::Files);
     // Create a channel to receive the events.
     let (tx, rx) = channel();
 

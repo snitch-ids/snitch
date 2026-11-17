@@ -20,6 +20,10 @@ pub struct Config {
     pub url: String,
     #[serde(default = "Config::default_token")]
     pub token: String,
+    /// Seconds between heartbeats to the backend while snitch watches the
+    /// host (needs a token); 0 turns them off.
+    #[serde(default = "Config::default_heartbeat_interval")]
+    pub heartbeat_interval: u64,
 }
 
 impl Config {
@@ -31,6 +35,10 @@ impl Config {
 impl Config {
     pub(crate) fn default_url() -> String {
         "https://api.snitch.cool".to_string()
+    }
+
+    pub(crate) fn default_heartbeat_interval() -> u64 {
+        60
     }
 
     pub(crate) fn default_root() -> String {

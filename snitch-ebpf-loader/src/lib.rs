@@ -35,6 +35,10 @@ pub const PIN_DIR: &str = "/sys/fs/bpf/snitch";
 
 /// Maps the daemon uses.
 pub const DAEMON_MAPS: &[&str] = &["WATCHED", "EVENTS", "STATS", "CONTROL"];
+/// A spare, protected pin (`CONTROL` pinned a second time) for snitch's
+/// self-test: removing it must fail with `EPERM` and report a tamper
+/// attempt. If protection is broken, only this duplicate pin goes away.
+pub const SELFTEST_PIN: &str = "selftest";
 /// Maps nobody may open once the daemon has claimed its maps. `.rodata`
 /// (the offsets and protection settings) is frozen; protected anyway.
 const PROTECTED_MAP_NAMES: &[&str] = &[
@@ -235,6 +239,10 @@ pub fn pin_all(mut bpf: Ebpf, pin_dir: &Path, cgroup_root: &Path) -> Result<()> 
             .pin(pin(format!("map_{name}")))
             .wrap_err_with(|| format!("pinning map {name}"))?;
     }
+    bpf.map("CONTROL")
+        .unwrap()
+        .pin(pin(SELFTEST_PIN.into()))
+        .wrap_err("pinning the self-test pin")?;
 
     for name in MONITOR_PROGRAMS.iter().chain(PROTECT_PROGRAMS) {
         let prog: &mut Lsm = bpf.program_mut(name).unwrap().try_into()?;
