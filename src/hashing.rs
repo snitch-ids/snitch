@@ -14,6 +14,7 @@ use crate::config::Config;
 use crate::dispatcher::{MessageBackend, SnitchDispatcher};
 use crate::persist::{open_database, upsert_hashes, PersistError};
 use crate::style::get_progressbar;
+use crate::verity::Verity;
 
 /// calculate the hash of a file located at `path`.
 pub async fn hash_file(path: &Path) -> std::io::Result<String> {
@@ -49,7 +50,7 @@ pub enum HashDBError {
 ///
 /// With `root`, hash the files below that directory as if it were `/`, for
 /// building images: the database goes below `root` too, and its paths leave
-/// `root` out.
+/// `root` out. Without, files on dm-verity file systems are left out.
 pub async fn init_hash_db(
     config: &Config,
     dispatcher: &SnitchDispatcher,
@@ -66,7 +67,7 @@ pub async fn init_hash_db(
         info!("database already found at: {database_path:?}. Deleting.");
         std::fs::remove_dir_all(&database_path)?;
     }
-    let directories: Vec<PathBuf> = config
+    let mut directories: Vec<PathBuf> = config
         .directories
         .iter()
         .map(|dir| under_root(Path::new(dir)))
@@ -78,13 +79,18 @@ pub async fn init_hash_db(
             exists
         })
         .collect();
+    let verity = match root {
+        Some(_) => Verity::default(),
+        None => detect_verity(&directories),
+    };
+    directories = verity.roots(&directories.iter().map(PathBuf::as_path).collect::<Vec<_>>());
 
     let db = open_database(&database_path)?;
     let progressbar = get_progressbar(directories.len() as u64, 1);
     for directory in &directories {
         progressbar.inc(1);
         progressbar.set_message(format!("{}", directory.display()));
-        upsert_hash_tree(&db, dispatcher, directory, &database_path, root).await?;
+        upsert_hash_tree(&db, dispatcher, directory, &database_path, root, &verity).await?;
     }
     progressbar.finish_with_message(format!(
         "{} files, database checksum: {}",
@@ -100,19 +106,37 @@ fn is_symlink_or_directory(entry: &Path) -> bool {
     entry.is_dir() || entry.is_symlink()
 }
 
+/// dm-verity file systems below `dirs`, logged.
+pub fn detect_verity<P: AsRef<Path>>(dirs: &[P]) -> Verity {
+    let dirs: Vec<&Path> = dirs.iter().map(AsRef::as_ref).collect();
+    let verity = Verity::detect(&dirs);
+    for line in verity.describe() {
+        info!("{line}: its files aren't hashed");
+    }
+    for line in &verity.ignored {
+        warn!("{line}: its files are hashed");
+    }
+    if let Some(err) = &verity.error {
+        warn!("dm-verity: {err}");
+    }
+    verity
+}
+
 /// Starts walking a `start_path`, hashes all files and stores the hashes together with the
-/// path in a database `db`. The database's own directory is left out. With
-/// `root`, the stored paths leave it out.
+/// path in a database `db`. The database's own directory and files on
+/// dm-verity file systems are left out. With `root`, the stored paths leave
+/// it out.
 async fn upsert_hash_tree(
     db: &Db,
     dispatcher: &SnitchDispatcher,
     start_path: &Path,
     database_path: &Path,
     root: Option<&Path>,
+    verity: &Verity,
 ) -> std::io::Result<()> {
-    let walker = WalkDir::new(start_path)
-        .into_iter()
-        .filter_entry(|e| !e.path().starts_with(database_path));
+    let walker = WalkDir::new(start_path).into_iter().filter_entry(|e| {
+        !e.path().starts_with(database_path) && !e.metadata().is_ok_and(|md| verity.verified(&md))
+    });
 
     for entry in walker {
         match entry {
@@ -210,7 +234,10 @@ fn notify_ready() {
 }
 
 pub async fn watch_files(config: &Config, dispatcher: &SnitchDispatcher) {
-    let _health = crate::heartbeat::start(config, crate::heartbeat::Mode::Files);
+    let directories = config.directories();
+    let verity = detect_verity(&directories);
+    let _health =
+        crate::heartbeat::start(config, crate::heartbeat::Mode::Files, verity.mounts.clone());
     // Create a channel to receive the events.
     let (tx, rx) = channel();
 
@@ -220,9 +247,11 @@ pub async fn watch_files(config: &Config, dispatcher: &SnitchDispatcher) {
 
     // Add a path to be watched. All files and directories at that path and
     // below will be monitored for changes.
-    for directory in config.directories() {
+    // Recursive: a verified file system mounted below a watched directory
+    // (not the default directories) is watched too.
+    for directory in verity.roots(&directories) {
         info!("adding watcher for {:?}", directory);
-        watcher.watch(directory, RecursiveMode::Recursive).unwrap();
+        watcher.watch(&directory, RecursiveMode::Recursive).unwrap();
     }
     notify_ready();
 

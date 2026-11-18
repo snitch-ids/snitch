@@ -39,6 +39,8 @@ chrono = {version =  "0.4.41", features = ["serde"] }
 hostname = "^0.4"
 
 [target.'cfg(target_os = "linux")'.dependencies]
+# device-mapper ioctl (dm-verity tables)
+libc = "0.2"
 # aya 0.14: newest release that builds with Rust 1.94 (Yocto wrynose);
 # aya 0.15+ needs 1.98.
 aya = { version = "=0.14.0", default-features = false, optional = true }

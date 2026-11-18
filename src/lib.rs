@@ -10,3 +10,4 @@ mod heartbeat;
 pub mod persist;
 pub mod style;
 pub mod test_utils;
+pub mod verity;

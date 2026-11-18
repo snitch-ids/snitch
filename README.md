@@ -261,17 +261,46 @@ initramfs on the device and don't sign it, so root can build one without
 the loader and reboot. The heartbeat then reports the reboot and the
 changed mode. A signed boot chain (e.g. a signed UKI) closes that.
 
+Updating snitch: install the new binaries (and the initramfs, e.g.
+`update-initramfs -u`), then reboot. The exec lock trusts the binary it
+found at boot, so until the reboot `snitch.service` can't start the new one.
+If it isn't restarted, the running snitch keeps watching.
+
+dm-verity
+---------
+
+If a watched directory is on a dm-verity file system (a verified root, or a
+verified `/usr` as with systemd's `usrhash=`), snitch uses it; nothing to
+configure. dm-verity is never required.
+
+- Files there aren't hashed (`--init`, the startup check, `--scan`): the
+  kernel checks every block against the image's hash tree, so they can't
+  change. In BPF mode they stay in the watch map, so the exec lock trusts
+  snitch's own libraries on a verified `/usr`.
+- What is mounted below or over a verified path (a writable `/var`, an
+  overlay on `/etc`, a tmpfs) is hashed and watched as usual.
+- Heartbeats carry the root hash of each verified file system. The backend
+  alerts "Image changed" when a new session reports other root hashes, or
+  none: another image was booted.
+- `snitch --check` lists them, and fails if dm-verity found corrupted blocks.
+  A device set up with `ignore_corruption` (logs bad blocks but returns
+  them) doesn't count as verified.
+
+snitch reads the device-mapper tables (as `dmsetup table` does), which
+needs root.
+
 Heartbeats
 ----------
 
-With a backend token, `--watch-ebpf` and `--watch-files` send a heartbeat
-every `heartbeat_interval` seconds (config, default 60; 0 turns them off).
-The heartbeat carries the boot id, the monitoring mode, the self-test
-result, the number of watched files, and the path and SHA-256 of the
-configuration file. The backend alerts when:
+With a backend token, `--watch` sends a heartbeat every
+`heartbeat_interval` seconds (config, default 60; 0 turns them off). The
+heartbeat carries the boot id, the monitoring mode, the self-test result,
+the number of watched files, the path and SHA-256 of the configuration
+file, and the dm-verity root hashes. The backend alerts when:
 - heartbeats stop, and when they come back
 - snitch restarts, or the host reboots
 - snitch restarts with another configuration file
+- snitch restarts on another dm-verity image
 - a heartbeat is forged or replayed
 
 Each snitch process signs its heartbeats with a random key of its own

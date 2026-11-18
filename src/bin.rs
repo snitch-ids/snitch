@@ -29,6 +29,7 @@ mod heartbeat;
 mod persist;
 mod style;
 mod test_utils;
+mod verity;
 
 fn setup_logging(args: &Cli) {
     let filter_level = match args.verbose {
@@ -89,9 +90,15 @@ async fn main() -> Result<()> {
     } else if args.watch {
         #[cfg(all(feature = "ebpf", target_os = "linux"))]
         match ebpf::unavailable() {
-            None => ebpf::watch_ebpf(&config, &dispatcher)
-                .await
-                .wrap_err("BPF file monitoring failed")?,
+            // If loading or running the BPF programs fails, watching goes on
+            // with inotify; the heartbeat reports the mode change.
+            None => {
+                if let Err(err) = ebpf::watch_ebpf(&config, &dispatcher).await {
+                    error!("BPF file monitoring failed: {err:?}");
+                    warn!("watching with inotify instead");
+                    watch_files(&config, &dispatcher).await;
+                }
+            }
             Some(reason) => {
                 warn!(
                     "watching with inotify, not with BPF LSM programs: {reason} (snitch --check \

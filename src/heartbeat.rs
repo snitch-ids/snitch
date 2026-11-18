@@ -25,6 +25,7 @@ use serde::Serialize;
 
 use crate::config::Config;
 use crate::dispatcher::HOSTNAME;
+use crate::verity::VerityMount;
 
 /// Hex HMAC-SHA256 of the body, keyed with the session key.
 const SIGNATURE_HEADER: &str = "X-Snitch-Signature";
@@ -61,6 +62,10 @@ pub struct Health {
     /// Files from the hash database that are watched (BPF modes).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub watched: Option<u64>,
+    /// dm-verity file systems below the watched directories; snitch
+    /// doesn't hash their files. The backend alerts when they change.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub verity: Vec<VerityMount>,
 }
 
 pub type SharedHealth = Arc<Mutex<Health>>;
@@ -89,13 +94,14 @@ struct Heartbeat<'a> {
 
 /// Shared health for the watcher; sends heartbeats with it if a backend
 /// token is configured.
-pub fn start(config: &Config, mode: Mode) -> SharedHealth {
+pub fn start(config: &Config, mode: Mode, verity: Vec<VerityMount>) -> SharedHealth {
     let health = Arc::new(Mutex::new(Health {
         mode,
         selftest: None,
         events_dropped: 0,
         tamper_blocked: 0,
         watched: None,
+        verity,
     }));
     if config.token.is_empty() {
         return health;

@@ -539,17 +539,22 @@ pub fn inode_free_security(ctx: LsmContext) -> i32 {
     verdict(unsafe { try_inode_free(&ctx) })
 }
 
+/// An inode is freed for good (no links left; evicted but linked inodes come
+/// back with the same number): its number may go to a new file, which must
+/// not inherit a watch or the exec lock's trust. For a trusted program: the
+/// new one (an update) runs in snitch.service after the next boot.
 #[inline(always)]
 unsafe fn try_inode_free(ctx: &LsmContext) -> R<()> {
     let inode: *const u8 = ctx.arg(0);
     let Some(key) = inode_key(inode)? else {
         return Ok(());
     };
-    if WATCHED.get(&key).is_none() {
-        return Ok(());
+    // One map at a time: LLVM would merge two lookups' null checks into an
+    // OR of the pointers, which the verifier refuses.
+    if TRUSTED_EXES.get(&key).is_some() && read::<u32>(inode, off(&OFF_INODE_I_NLINK))? == 0 {
+        let _ = TRUSTED_EXES.remove(&key);
     }
-    let nlink: u32 = read(inode, off(&OFF_INODE_I_NLINK))?;
-    if nlink == 0 {
+    if WATCHED.get(&key).is_some() && read::<u32>(inode, off(&OFF_INODE_I_NLINK))? == 0 {
         let _ = WATCHED.remove(&key);
         emit(EV_INODE_FREED, key, core::ptr::null());
     }

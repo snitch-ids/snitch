@@ -301,41 +301,73 @@ pub async fn watch_ebpf(config: &Config, dispatcher: &SnitchDispatcher) -> Resul
         bail!("the hash database is empty; run snitch --init first");
     }
 
+    // Files on dm-verity can't change: not hashed at the start. They stay in
+    // the watch map, where the exec lock looks up which code snitch.service
+    // may map (its libraries may be on a verified /usr).
+    let verity = crate::hashing::detect_verity(&config.directories());
+    let mut verified = HashSet::new();
     let mut by_key = StdHashMap::new();
     let mut by_path = StdHashMap::new();
+    let (mut n_files, mut n_verified, mut n_dirs) = (0, 0, 0);
     for path in baseline.keys() {
         match std::fs::symlink_metadata(path) {
             Ok(md) if md.file_type().is_file() => {
                 let key = inode_key(&md);
-                by_key.entry(key).or_insert(Watch {
-                    path: path.clone(),
-                    kind: WATCH_FILE,
-                });
+                let on_verity = verity.verified(&md);
+                if on_verity {
+                    verified.insert(path.clone());
+                }
+                if let std::collections::hash_map::Entry::Vacant(e) = by_key.entry(key) {
+                    e.insert(Watch {
+                        path: path.clone(),
+                        kind: WATCH_FILE,
+                    });
+                    match on_verity {
+                        true => n_verified += 1,
+                        false => n_files += 1,
+                    }
+                }
                 by_path.insert(path.clone(), key);
             }
             Ok(_) => {}
             Err(err) => warn!("{}: {err}. Not watched.", path.display()),
         }
     }
-    let n_files = by_key.len();
     let db_path = config.database_path();
     for dir in config.directories() {
         let walker = WalkDir::new(dir)
             .into_iter()
             .filter_entry(|e| !e.path().starts_with(&db_path));
         for entry in walker.flatten() {
-            if !entry.file_type().is_dir() {
+            let is_dir = entry.file_type().is_dir();
+            if !is_dir && (verity.is_empty() || !entry.file_type().is_file()) {
                 continue;
             }
-            if let Ok(md) = entry.metadata() {
-                by_key.entry(inode_key(&md)).or_insert(Watch {
+            let Ok(md) = entry.metadata() else { continue };
+            // Nothing is created, renamed or removed on a verified file
+            // system: no directory watches there.
+            let kind = match (is_dir, verity.verified(&md)) {
+                (true, false) => WATCH_DIR,
+                (false, true) => WATCH_FILE,
+                _ => continue,
+            };
+            let key = inode_key(&md);
+            if by_key.contains_key(&key) {
+                continue;
+            }
+            by_key.insert(
+                key,
+                Watch {
                     path: entry.path().to_owned(),
-                    kind: WATCH_DIR,
-                });
+                    kind,
+                },
+            );
+            match kind {
+                WATCH_DIR => n_dirs += 1,
+                _ => n_verified += 1,
             }
         }
     }
-    let n_dirs = by_key.len() - n_files;
 
     let pinned = Path::new(PIN_DIR).join("map_CONTROL").exists();
     let maps = if pinned {
@@ -374,6 +406,9 @@ pub async fn watch_ebpf(config: &Config, dispatcher: &SnitchDispatcher) -> Resul
             "loaded by this process"
         }
     );
+    if n_verified > 0 {
+        info!("{n_verified} files on dm-verity: not hashed, trusted by the exec lock");
+    }
 
     let mut events = AsyncFd::new(RingBuf::try_from(Map::RingBuf(maps.events))?)?;
     let stats: PerCpuArray<MapData, u64> = PerCpuArray::try_from(Map::PerCpuArray(maps.stats))?;
@@ -393,6 +428,7 @@ pub async fn watch_ebpf(config: &Config, dispatcher: &SnitchDispatcher) -> Resul
     check_baseline(
         baseline
             .iter()
+            .filter(|(p, _)| !verified.contains(*p))
             .map(|(p, h)| (p.clone(), h.clone()))
             .collect(),
         later_tx.clone(),
@@ -408,7 +444,7 @@ pub async fn watch_ebpf(config: &Config, dispatcher: &SnitchDispatcher) -> Resul
         tamper_reported: StdHashMap::new(),
         later: later_tx,
         selftest,
-        health: heartbeat::start(config, mode),
+        health: heartbeat::start(config, mode, verity.mounts.clone()),
     };
     monitor.health.lock().unwrap().watched = Some(n_files as u64);
     if std::env::var_os("NOTIFY_SOCKET").is_some() {

@@ -2031,6 +2031,7 @@ dependencies = [
  "hostname",
  "indicatif",
  "lazy_static",
+ "libc",
  "log",
  "needs_env_var",
  "notify",

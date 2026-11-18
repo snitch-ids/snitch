@@ -82,6 +82,9 @@ pub async fn validate_hashes(
 ) -> Result<(), PersistError> {
     let db = open_database(&config.database_path())?;
     let progressbar = get_progressbar(db.len() as u64, 10);
+    // Files on dm-verity can't change: not hashed again.
+    let verity = crate::hashing::detect_verity(&config.directories());
+    let mut verified = 0;
 
     for key in db.iter() {
         progressbar.inc(1);
@@ -90,6 +93,10 @@ pub async fn validate_hashes(
         let former_hash = from_utf8(&vec.1)?;
 
         let fp = Path::new(&vec_str);
+        if verity.verified_path(fp) {
+            verified += 1;
+            continue;
+        }
         if !fp.exists() {
             let message = MessageBackend::new_now(
                 "File/directory removed".to_string(),
@@ -108,6 +115,9 @@ pub async fn validate_hashes(
         }
     }
     progressbar.finish_with_message("done");
+    if verified > 0 {
+        info!("{verified} files on dm-verity not hashed");
+    }
     info!("database checksum: {}", db.checksum()?);
 
     Ok(())

@@ -16,6 +16,7 @@ use crate::config::{load_config_from_file, Config};
 /// Tokens from example configurations (older --demo-config, the default).
 const PLACEHOLDER_TOKENS: &[&str] = &["PASTEYOURTOKENHERE", "SDFOIJSDFOIJSDFOIJ"];
 use crate::persist::open_database;
+use crate::verity::{short, Verity};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Level {
@@ -79,6 +80,7 @@ pub async fn run(config_path: &Path) -> bool {
 
     let config = configuration(&mut r, config_path);
     if let Some(config) = &config {
+        verity(&mut r, config);
         database(&mut r, config);
         backend(&mut r, config).await;
     }
@@ -173,6 +175,53 @@ fn configuration(r: &mut Report, path: &Path) -> Option<Config> {
         );
     }
     Some(config)
+}
+
+/// dm-verity file systems below the watched directories.
+fn verity(r: &mut Report, config: &Config) {
+    r.section("dm-verity");
+    let verity = Verity::detect(&config.directories());
+    for m in &verity.mounts {
+        r.item(
+            Level::Ok,
+            format!(
+                "{} (root hash {}{}): its files aren't hashed; the backend alerts when the \
+                 root hash changes",
+                m.mount,
+                short(&m.root_hash),
+                if m.signed { ", signed" } else { "" }
+            ),
+            None,
+        );
+        if m.corrupted {
+            r.item(
+                Level::Fail,
+                format!("{}: dm-verity found blocks that don't match", m.mount),
+                Some(
+                    "the disk was modified or is failing; see the kernel log (journalctl -k \
+                     | grep verity)"
+                        .into(),
+                ),
+            );
+        }
+    }
+    for line in &verity.ignored {
+        r.item(
+            Level::Warn,
+            format!("{line}; snitch hashes its files"),
+            Some("set it up without ignore_corruption".into()),
+        );
+    }
+    if let Some(err) = &verity.error {
+        r.item(Level::Warn, err.clone(), None);
+    } else if verity.is_empty() && verity.ignored.is_empty() {
+        r.item(
+            Level::Info,
+            "none below the watched directories: snitch hashes and watches all their files \
+             (standalone)",
+            None,
+        );
+    }
 }
 
 fn database(r: &mut Report, config: &Config) {
